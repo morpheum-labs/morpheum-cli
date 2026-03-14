@@ -25,6 +25,10 @@ pub enum VcCommands {
 
 #[derive(Args)]
 pub struct IssueArgs {
+    /// Issuer agent hash (hex, 32 bytes) — the identity module `agent_id.hash`
+    #[arg(long)]
+    pub issuer: String,
+
     /// Subject agent hash (hex, 32 bytes) receiving the credential
     #[arg(long)]
     pub subject: String,
@@ -53,7 +57,7 @@ pub struct IssueArgs {
     #[arg(long, default_value = "0")]
     pub expiry: u64,
 
-    /// Key name to sign with (issuer key)
+    /// Key name to sign the transaction
     #[arg(long, default_value = "default")]
     pub from: String,
 
@@ -68,11 +72,15 @@ pub struct RevokeArgs {
     #[arg(long)]
     pub vc_id: String,
 
+    /// Issuer agent hash (hex, 32 bytes) — must match the VC's original issuer
+    #[arg(long)]
+    pub issuer: String,
+
     /// Reason for revocation
     #[arg(long)]
     pub reason: Option<String>,
 
-    /// Key name to sign with (must be the original issuer)
+    /// Key name to sign the transaction
     #[arg(long, default_value = "default")]
     pub from: String,
 
@@ -110,10 +118,9 @@ pub async fn execute(cmd: VcCommands, dispatcher: Dispatcher) -> Result<(), CliE
 
 async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let issuer_id = signer.account_id();
-    let issuer_sig = signer.public_key().to_proto_bytes();
-
+    let issuer_id = parse_account_id(&args.issuer)?;
     let subject_id = parse_account_id(&args.subject)?;
+    let issuer_sig = signer.public_key().to_proto_bytes();
 
     let claims = VcClaims {
         max_daily_usd: args.max_daily_usd,
@@ -149,7 +156,7 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 
 async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let issuer_id = signer.account_id();
+    let issuer_id = parse_account_id(&args.issuer)?;
     let issuer_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = VcRevokeBuilder::new()

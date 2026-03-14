@@ -21,7 +21,6 @@ This split gives the **best of both worlds**: power for developers + intuitive U
 |---------------------------|-----------------|-------------------------------------------------------|--------|
 | On-chain modules          | `tx` / `query`  | `morpheum tx job create ...`<br>`morpheum tx x402 pay ...`<br>`morpheum query job status ...` | Direct blockchain access |
 | Protocol layers           | Top-level       | `morpheum mcp call ...`<br>`morpheum a2a delegate ...`<br>`morpheum bridge send-proof ...`<br>`morpheum mwvm infer ...` | High-level gateways & developer tools |
-| Agent operations          | Top-level       | `morpheum agent register --full ...`<br>`morpheum agent interact ...` | Unified user experience |
 | Keys & Config             | Top-level       | `morpheum keys add ...`<br>`morpheum config` | Utility commands |
 
 ### How x402 Fits (The Key Question)
