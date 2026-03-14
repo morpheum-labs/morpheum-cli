@@ -4,6 +4,7 @@ use morpheum_sdk_native::marketplace::{
     ListAgentBuilder, PlaceBidBuilder, AcceptBidBuilder, RequestEvaluationBuilder,
     ListingType, RevenueShareConfig,
 };
+use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -140,8 +141,8 @@ pub async fn execute(cmd: MarketplaceCommands, dispatcher: Dispatcher) -> Result
 
 async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let seller_hash = signer.account_id().to_string();
-    let seller_sig = signer.public_key().as_bytes().to_vec();
+    let seller_hash = hex::encode(signer.account_id().0);
+    let seller_sig = signer.public_key().to_proto_bytes();
 
     let revenue_share = RevenueShareConfig {
         creator_cut_bps: args.creator_cut_bps,
@@ -168,15 +169,15 @@ async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         builder = builder.expires_at(args.expires_at);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Agent {} listed for ${} ({:?})\nTxHash: {}",
-        args.agent_hash, args.price_usd, args.listing_type, result.txhash,
+        args.agent_hash, args.price_usd, args.listing_type, txhash,
     ));
 
     Ok(())
@@ -184,21 +185,21 @@ async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 async fn place_bid(args: PlaceBidArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let bidder_sig = signer.public_key().as_bytes().to_vec();
+    let bidder_sig = signer.public_key().to_proto_bytes();
 
     let request = PlaceBidBuilder::new()
         .listing_id(&args.listing_id)
         .amount_usd(args.amount_usd)
         .bidder_signature(bidder_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Bid of ${} placed on listing {}\nTxHash: {}",
-        args.amount_usd, args.listing_id, result.txhash,
+        args.amount_usd, args.listing_id, txhash,
     ));
 
     Ok(())
@@ -206,21 +207,21 @@ async fn place_bid(args: PlaceBidArgs, dispatcher: &Dispatcher) -> Result<(), Cl
 
 async fn accept_bid(args: AcceptBidArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let seller_sig = signer.public_key().as_bytes().to_vec();
+    let seller_sig = signer.public_key().to_proto_bytes();
 
     let request = AcceptBidBuilder::new()
         .listing_id(&args.listing_id)
         .bid_id(&args.bid_id)
         .seller_signature(seller_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Bid {} accepted on listing {}\nTxHash: {}",
-        args.bid_id, args.listing_id, result.txhash,
+        args.bid_id, args.listing_id, txhash,
     ));
 
     Ok(())
@@ -231,22 +232,22 @@ async fn request_evaluation(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let requester_sig = signer.public_key().as_bytes().to_vec();
+    let requester_sig = signer.public_key().to_proto_bytes();
 
     let request = RequestEvaluationBuilder::new()
         .agent_hash(&args.agent_hash)
         .evaluator_agent_hash(&args.evaluator_hash)
         .fee_usd(args.fee_usd)
         .requester_signature(requester_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Evaluation requested for agent {}\nEvaluator: {}, Fee: ${}\nTxHash: {}",
-        args.agent_hash, args.evaluator_hash, args.fee_usd, result.txhash,
+        args.agent_hash, args.evaluator_hash, args.fee_usd, txhash,
     ));
 
     Ok(())

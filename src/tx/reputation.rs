@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::reputation::{
     ApplyPenaltyBuilder, ApplyRecoveryBuilder, ForceMilestoneBuilder, RecoveryActionType,
 };
@@ -106,7 +107,7 @@ pub async fn execute(cmd: ReputationCommands, dispatcher: Dispatcher) -> Result<
 
 async fn apply_penalty(args: ApplyPenaltyArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let signer_bytes = signer.public_key().as_bytes().to_vec();
+    let signer_bytes = signer.public_key().to_proto_bytes();
 
     let request = ApplyPenaltyBuilder::new()
         .agent_hash(&args.agent_hash)
@@ -114,16 +115,17 @@ async fn apply_penalty(args: ApplyPenaltyArgs, dispatcher: &Dispatcher) -> Resul
         .multiplier(args.multiplier)
         .reason(&args.reason)
         .signer(signer_bytes)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Penalty applied to agent {}\nBase: {} (x{})\nReason: {}\nTxHash: {}",
-        args.agent_hash, args.base_amount, args.multiplier, args.reason, result.txhash,
+        args.agent_hash, args.base_amount, args.multiplier, args.reason, txhash,
     ));
 
     Ok(())
@@ -140,16 +142,17 @@ async fn apply_recovery(
         .action_type(args.action_type)
         .amount(args.amount)
         .reason(&args.reason)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Recovery applied to agent {}\nAction: {}, Amount: {}\nReason: {}\nTxHash: {}",
-        args.agent_hash, args.action_type, args.amount, args.reason, result.txhash,
+        args.agent_hash, args.action_type, args.amount, args.reason, txhash,
     ));
 
     Ok(())
@@ -160,22 +163,23 @@ async fn force_milestone(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let gov_sig = signer.public_key().as_bytes().to_vec();
+    let gov_sig = signer.public_key().to_proto_bytes();
 
     let request = ForceMilestoneBuilder::new()
         .agent_hash(&args.agent_hash)
         .milestone_level(args.level)
         .gov_signature(gov_sig)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Milestone forced on agent {}\nLevel: {}\nTxHash: {}",
-        args.agent_hash, args.level, result.txhash,
+        args.agent_hash, args.level, txhash,
     ));
 
     Ok(())

@@ -2,6 +2,7 @@ use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::vc::{VcIssueBuilder, VcRevokeBuilder, VcSelfRevokeBuilder, VcClaims};
 use morpheum_sdk_native::AccountId;
+use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -110,7 +111,7 @@ pub async fn execute(cmd: VcCommands, dispatcher: Dispatcher) -> Result<(), CliE
 async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let issuer_id = signer.account_id();
-    let issuer_sig = signer.public_key().as_bytes().to_vec();
+    let issuer_sig = signer.public_key().to_proto_bytes();
 
     let subject_id = parse_account_id(&args.subject)?;
 
@@ -132,15 +133,15 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         builder = builder.expiry(args.expiry);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "VC issued to {}\nMax daily: ${}, Max position: ${}\nTxHash: {}",
-        args.subject, args.max_daily_usd, args.max_position_usd, result.txhash,
+        args.subject, args.max_daily_usd, args.max_position_usd, txhash,
     ));
 
     Ok(())
@@ -149,7 +150,7 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let issuer_id = signer.account_id();
-    let issuer_sig = signer.public_key().as_bytes().to_vec();
+    let issuer_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = VcRevokeBuilder::new()
         .vc_id(&args.vc_id)
@@ -160,14 +161,14 @@ async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
         builder = builder.reason(reason);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
-        "VC {} revoked\nTxHash: {}", args.vc_id, result.txhash,
+        "VC {} revoked\nTxHash: {}", args.vc_id, txhash,
     ));
 
     Ok(())
@@ -175,7 +176,7 @@ async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
 async fn self_revoke(args: SelfRevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let agent_sig = signer.public_key().as_bytes().to_vec();
+    let agent_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = VcSelfRevokeBuilder::new()
         .vc_id(&args.vc_id)
@@ -185,14 +186,14 @@ async fn self_revoke(args: SelfRevokeArgs, dispatcher: &Dispatcher) -> Result<()
         builder = builder.reason(reason);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
-        "VC {} self-revoked\nTxHash: {}", args.vc_id, result.txhash,
+        "VC {} self-revoked\nTxHash: {}", args.vc_id, txhash,
     ));
 
     Ok(())

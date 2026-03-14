@@ -52,6 +52,7 @@ pub enum CliError {
         code(morpheum::cli::transport),
         help("Check --rpc endpoint and ensure the node is running")
     )]
+    #[allow(dead_code)]
     Transport(String),
 
     #[error("Internal error: {0}")]

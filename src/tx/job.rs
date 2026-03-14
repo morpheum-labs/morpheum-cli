@@ -1,9 +1,10 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::job::{
     CreateJobBuilder, FundJobBuilder, SubmitDeliverableBuilder, AttestBuilder,
     ClaimRefundBuilder, SetProviderBuilder, CancelJobBuilder,
-    Deliverable, RevenueShareConfig,
+    Deliverable,
 };
 
 use crate::dispatcher::Dispatcher;
@@ -176,8 +177,8 @@ pub async fn execute(cmd: JobCommands, dispatcher: Dispatcher) -> Result<(), Cli
 
 async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let client_hash = signer.account_id().to_string();
-    let client_sig = signer.public_key().as_bytes().to_vec();
+    let client_hash = hex::encode(signer.account_id().0);
+    let client_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = CreateJobBuilder::new()
         .client_agent_hash(&client_hash)
@@ -196,15 +197,15 @@ async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
         builder = builder.vc_proof_hash(vc);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Job created\nBudget: ${}, Evaluator: {}\nTxHash: {}",
-        args.budget_usd, args.evaluator_hash, result.txhash,
+        args.budget_usd, args.evaluator_hash, txhash,
     ));
 
     Ok(())
@@ -212,21 +213,21 @@ async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
 async fn fund(args: FundArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let client_sig = signer.public_key().as_bytes().to_vec();
+    let client_sig = signer.public_key().to_proto_bytes();
 
     let request = FundJobBuilder::new()
         .job_id(&args.job_id)
         .amount_usd(args.amount_usd)
         .client_signature(client_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     ).await?;
 
     dispatcher.output.success(format!(
         "Job {} funded with ${}\nTxHash: {}",
-        args.job_id, args.amount_usd, result.txhash,
+        args.job_id, args.amount_usd, txhash,
     ));
 
     Ok(())
@@ -237,8 +238,8 @@ async fn submit_deliverable(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let provider_hash = signer.account_id().to_string();
-    let provider_sig = signer.public_key().as_bytes().to_vec();
+    let provider_hash = hex::encode(signer.account_id().0);
+    let provider_sig = signer.public_key().to_proto_bytes();
 
     let payload = args
         .payload
@@ -261,15 +262,15 @@ async fn submit_deliverable(
         .job_id(&args.job_id)
         .deliverable(deliverable)
         .provider_signature(provider_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     ).await?;
 
     dispatcher.output.success(format!(
         "Deliverable submitted for job {}\nTxHash: {}",
-        args.job_id, result.txhash,
+        args.job_id, txhash,
     ));
 
     Ok(())
@@ -277,23 +278,23 @@ async fn submit_deliverable(
 
 async fn attest(args: AttestArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let evaluator_sig = signer.public_key().as_bytes().to_vec();
+    let evaluator_sig = signer.public_key().to_proto_bytes();
 
     let request = AttestBuilder::new()
         .job_id(&args.job_id)
         .completed(args.completed)
         .reason_hash(&args.reason_hash)
         .evaluator_signature(evaluator_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     ).await?;
 
     let status = if args.completed { "completed" } else { "rejected" };
     dispatcher.output.success(format!(
         "Job {} attested as {}\nTxHash: {}",
-        args.job_id, status, result.txhash,
+        args.job_id, status, txhash,
     ));
 
     Ok(())
@@ -301,20 +302,20 @@ async fn attest(args: AttestArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
 async fn claim_refund(args: ClaimRefundArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let caller_sig = signer.public_key().as_bytes().to_vec();
+    let caller_sig = signer.public_key().to_proto_bytes();
 
     let request = ClaimRefundBuilder::new()
         .job_id(&args.job_id)
         .caller_signature(caller_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     ).await?;
 
     dispatcher.output.success(format!(
         "Refund claimed for job {}\nTxHash: {}",
-        args.job_id, result.txhash,
+        args.job_id, txhash,
     ));
 
     Ok(())
@@ -322,21 +323,21 @@ async fn claim_refund(args: ClaimRefundArgs, dispatcher: &Dispatcher) -> Result<
 
 async fn set_provider(args: SetProviderArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let client_sig = signer.public_key().as_bytes().to_vec();
+    let client_sig = signer.public_key().to_proto_bytes();
 
     let request = SetProviderBuilder::new()
         .job_id(&args.job_id)
         .new_provider_agent_hash(&args.provider_hash)
         .client_signature(client_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     ).await?;
 
     dispatcher.output.success(format!(
         "Provider for job {} set to {}\nTxHash: {}",
-        args.job_id, args.provider_hash, result.txhash,
+        args.job_id, args.provider_hash, txhash,
     ));
 
     Ok(())
@@ -344,20 +345,20 @@ async fn set_provider(args: SetProviderArgs, dispatcher: &Dispatcher) -> Result<
 
 async fn cancel(args: CancelJobArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let signer_sig = signer.public_key().as_bytes().to_vec();
+    let signer_sig = signer.public_key().to_proto_bytes();
 
     let request = CancelJobBuilder::new()
         .job_id(&args.job_id)
         .signer_signature(signer_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     ).await?;
 
     dispatcher.output.success(format!(
         "Job {} cancelled\nTxHash: {}",
-        args.job_id, result.txhash,
+        args.job_id, txhash,
     ));
 
     Ok(())

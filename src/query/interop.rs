@@ -1,11 +1,13 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
+use morpheum_proto::interop::v1::query_client::QueryClient;
+use morpheum_proto::interop::v1::{
+    QueryBridgeRequestRequest, QueryIntentExportRequest, QueryProofExportRequest,
+    QueryParamsRequest,
+};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `interop` module.
 ///
@@ -51,80 +53,105 @@ pub async fn execute(
     cmd: InteropQueryCommands,
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
         InteropQueryCommands::BridgeRequest(args) => {
-            query_bridge_request(args, &sdk, &dispatcher.output).await
+            query_bridge_request(args, &dispatcher).await
         }
         InteropQueryCommands::IntentExport(args) => {
-            query_intent_export(args, &sdk, &dispatcher.output).await
+            query_intent_export(args, &dispatcher).await
         }
         InteropQueryCommands::ProofExport(args) => {
-            query_proof_export(args, &sdk, &dispatcher.output).await
+            query_proof_export(args, &dispatcher).await
         }
-        InteropQueryCommands::Params => query_params(&sdk, &dispatcher.output).await,
+        InteropQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
 async fn query_bridge_request(
     args: BridgeRequestArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.interop()
-        .query_and_print_optional(
-            output,
-            &format!("No bridge request found with ID {}", args.request_id),
-            |c| async move { c.query_bridge_request(&args.request_id).await },
-        )
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let request_id = args.request_id.clone();
+    let response = client
+        .query_bridge_request(tonic::Request::new(QueryBridgeRequestRequest {
+            request_id: args.request_id,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryBridgeRequest failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.found {
+        println!("{json}");
+    } else {
+        println!("No bridge request found with ID {request_id}");
+    }
+    Ok(())
 }
 
 async fn query_intent_export(
     args: IntentExportArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let export = sdk
-        .interop()
-        .query_intent_export(&args.intent_id)
-        .await?;
-
-    match export {
-        Some((packet, target_tx_hash)) => {
-            output.print_item(&packet)?;
-            output.info(format!("Target tx hash: {target_tx_hash}"));
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let intent_id = args.intent_id.clone();
+    let response = client
+        .query_intent_export(tonic::Request::new(QueryIntentExportRequest {
+            intent_id: args.intent_id,
+        }))
+        .await
+        .map_err(|e| CliError::Transport(format!("QueryIntentExport failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.found {
+        println!("{json}");
+        if !response.target_tx_hash.is_empty() {
+            println!("Target tx hash: {}", response.target_tx_hash);
         }
-        None => output.warn(format!(
-            "No intent export found for ID {}",
-            args.intent_id
-        )),
+    } else {
+        println!("No intent export found for ID {intent_id}");
     }
-
     Ok(())
 }
 
 async fn query_proof_export(
     args: ProofExportArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.interop()
-        .query_and_print_optional(
-            output,
-            &format!("No proof export found for ID {}", args.proof_id),
-            |c| async move { c.query_proof_export(&args.proof_id).await },
-        )
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let proof_id = args.proof_id.clone();
+    let response = client
+        .query_proof_export(tonic::Request::new(QueryProofExportRequest {
+            proof_id: args.proof_id,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryProofExport failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.found {
+        println!("{json}");
+    } else {
+        println!("No proof export found for ID {proof_id}");
+    }
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.interop()
-        .query_and_print_optional(
-            output,
-            "No interop parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(QueryParamsRequest {}))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.params.is_some() {
+        println!("{json}");
+    } else {
+        println!("No interop parameters configured");
+    }
+    Ok(())
 }

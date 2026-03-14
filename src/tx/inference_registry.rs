@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::inference_registry::{RegisterModelBuilder, QuantFormat};
 
 use crate::dispatcher::Dispatcher;
@@ -25,7 +26,7 @@ pub struct RegisterModelArgs {
     #[arg(long, value_parser = parse_quant_format)]
     pub quant: QuantFormat,
 
-    /// Parameter count (e.g. 8_000_000_000 for 8B)
+    /// Parameter count (e.g. `8_000_000_000` for 8B)
     #[arg(long)]
     pub param_count: u64,
 
@@ -70,7 +71,7 @@ async fn register_model(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let authority = signer.account_id().to_string();
+    let authority = hex::encode(signer.account_id().0);
 
     let zk_commitment = hex::decode(&args.zk_commitment)
         .map_err(|e| CliError::invalid_input(format!("invalid hex for zk_commitment: {e}")))?;
@@ -92,15 +93,15 @@ async fn register_model(
         .supported_ops(args.supported_ops)
         .version(args.version)
         .weights_payload(weights_payload)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Model registered: {} ({:?}, {}B params)\nTxHash: {}",
-        args.name, args.quant, args.param_count, result.txhash,
+        args.name, args.quant, args.param_count, txhash,
     ));
 
     Ok(())

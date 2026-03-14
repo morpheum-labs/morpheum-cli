@@ -1,12 +1,13 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-use morpheum_sdk_native::directory::types::DirectoryFilter;
+use morpheum_proto::directory::v1::query_client::QueryClient;
+use morpheum_proto::directory::v1::{
+    DirectoryFilter, QueryDirectoryProfileRequest, QueryDirectoryProfilesRequest,
+    QueryParamsRequest,
+};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `directory` module.
 ///
@@ -52,54 +53,70 @@ pub async fn execute(
     cmd: DirectoryQueryCommands,
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
         DirectoryQueryCommands::Profile(args) => {
-            query_profile(args, &sdk, &dispatcher.output).await
+            query_profile(args, &dispatcher).await
         }
         DirectoryQueryCommands::Profiles(args) => {
-            query_profiles(args, &sdk, &dispatcher.output).await
+            query_profiles(args, &dispatcher).await
         }
-        DirectoryQueryCommands::Params => query_params(&sdk, &dispatcher.output).await,
+        DirectoryQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
-async fn query_profile(
-    args: ProfileArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.directory()
-        .query_and_print_optional(
-            output,
-            &format!("No directory profile found for agent {}", args.agent_hash),
-            |c| async move { c.query_profile(&args.agent_hash).await },
-        )
+async fn query_profile(args: ProfileArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let agent_hash = args.agent_hash.clone();
+    let response = client
+        .query_directory_profile(tonic::Request::new(QueryDirectoryProfileRequest {
+            agent_hash: args.agent_hash,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryDirectoryProfile failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.found {
+        println!("{json}");
+    } else {
+        println!("No directory profile found for agent {agent_hash}");
+    }
+    Ok(())
 }
 
-async fn query_profiles(
-    args: ProfilesArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
+async fn query_profiles(args: ProfilesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
     let filter = build_filter(&args);
-    sdk.directory()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_profiles(args.limit, args.offset, filter).await
-        })
+    let response = client
+        .query_directory_profiles(tonic::Request::new(QueryDirectoryProfilesRequest {
+            filter,
+            limit: args.limit,
+            offset: args.offset,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryDirectoryProfiles failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.directory()
-        .query_and_print_optional(
-            output,
-            "No directory parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(QueryParamsRequest {}))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.params.is_some() {
+        println!("{json}");
+    } else {
+        println!("No directory parameters configured");
+    }
+    Ok(())
 }
 
 fn build_filter(args: &ProfilesArgs) -> Option<DirectoryFilter> {
@@ -111,7 +128,10 @@ fn build_filter(args: &ProfilesArgs) -> Option<DirectoryFilter> {
 
     Some(DirectoryFilter {
         min_reputation: args.min_reputation.unwrap_or(0),
+        min_milestone_level: 0,
         tags: args.tags.clone().unwrap_or_default(),
-        ..Default::default()
+        semantic_query: String::new(),
+        limit: 0,
+        offset: 0,
     })
 }

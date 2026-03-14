@@ -95,7 +95,7 @@ pub enum TxCommands {
     X402(x402::X402Commands),
 }
 
-#[allow(clippy::unused_async)]
+#[allow(clippy::unused_async, unused_variables)]
 pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         #[cfg(feature = "identity")]

@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -72,7 +73,7 @@ pub async fn execute(cmd: X402Commands, dispatcher: Dispatcher) -> Result<(), Cl
 
 async fn pay(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = signer.account_id().to_string();
+    let from_address = hex::encode(signer.account_id().0);
 
     let memo = args
         .invoice
@@ -85,15 +86,15 @@ async fn pay(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .amount(&args.amount)
         .asset_index(0)
         .memo(&memo)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, transfer.to_any(), Some(memo),
     ).await?;
 
     dispatcher.output.success(format!(
         "x402 payment sent\nTo: {}\nAmount: {} {}\nTxHash: {}",
-        args.destination, args.amount, args.denom, result.txhash,
+        args.destination, args.amount, args.denom, txhash,
     ));
 
     Ok(())
@@ -101,7 +102,7 @@ async fn pay(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 async fn approve(args: ApproveArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = signer.account_id().to_string();
+    let from_address = hex::encode(signer.account_id().0);
 
     let memo = format!(
         "x402-approve:{}:{}:{}",
@@ -114,15 +115,15 @@ async fn approve(args: ApproveArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
         .amount("0")
         .asset_index(0)
         .memo(&memo)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, transfer.to_any(), Some(memo),
     ).await?;
 
     dispatcher.output.success(format!(
         "x402 approval granted\nSpender: {}\nMax: {} {}\nExpiry: {}\nTxHash: {}",
-        args.spender, args.max_amount, args.denom, args.expiry, result.txhash,
+        args.spender, args.max_amount, args.denom, args.expiry, txhash,
     ));
 
     Ok(())

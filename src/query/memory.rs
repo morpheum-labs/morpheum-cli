@@ -1,11 +1,7 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `memory` module.
 ///
@@ -58,74 +54,91 @@ pub struct MemoryRootArgs {
 }
 
 pub async fn execute(cmd: MemoryQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
-        MemoryQueryCommands::Entry(args) => {
-            query_entry(args, &sdk, &dispatcher.output).await
-        }
+        MemoryQueryCommands::Entry(args) => query_entry(args, &dispatcher).await,
         MemoryQueryCommands::EntriesByAgent(args) => {
-            query_entries_by_agent(args, &sdk, &dispatcher.output).await
+            query_entries_by_agent(args, &dispatcher).await
         }
-        MemoryQueryCommands::MemoryRoot(args) => {
-            query_memory_root(args, &sdk, &dispatcher.output).await
-        }
-        MemoryQueryCommands::Params => {
-            query_params(&sdk, &dispatcher.output).await
-        }
+        MemoryQueryCommands::MemoryRoot(args) => query_memory_root(args, &dispatcher).await,
+        MemoryQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
-async fn query_entry(
-    args: EntryArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.memory()
-        .query_and_print_optional(
-            output,
-            &format!(
-                "No memory entry found for agent {} key '{}'",
-                args.agent_hash, args.key
-            ),
-            |c| async move { c.query_entry(&args.agent_hash, &args.key).await },
-        )
+async fn query_entry(args: EntryArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_memory_entry(tonic::Request::new(
+            morpheum_proto::memory::v1::QueryMemoryEntryRequest {
+                agent_hash: args.agent_hash,
+                key: args.key,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_memory_entry failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 async fn query_entries_by_agent(
     args: EntriesByAgentArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.memory()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_entries_by_agent(&args.agent_hash, args.limit, args.offset)
-                .await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_memory_entries_by_agent(tonic::Request::new(
+            morpheum_proto::memory::v1::QueryMemoryEntriesByAgentRequest {
+                agent_hash: args.agent_hash,
+                limit: args.limit,
+                offset: args.offset,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_memory_entries_by_agent failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 async fn query_memory_root(
     args: MemoryRootArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.memory()
-        .query_and_print_optional(
-            output,
-            &format!("No memory root found for agent {}", args.agent_hash),
-            |c| async move { c.query_memory_root(&args.agent_hash).await },
-        )
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_memory_root(tonic::Request::new(
+            morpheum_proto::memory::v1::QueryMemoryRootRequest {
+                agent_hash: args.agent_hash,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_memory_root failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.memory()
-        .query_and_print_optional(
-            output,
-            "No memory parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(
+            morpheum_proto::memory::v1::QueryParamsRequest {},
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_params failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }

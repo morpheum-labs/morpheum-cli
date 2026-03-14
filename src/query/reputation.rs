@@ -1,11 +1,7 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `reputation` module.
 ///
@@ -56,70 +52,87 @@ pub struct MilestoneStatusArgs {
 }
 
 pub async fn execute(cmd: ReputationQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
-        ReputationQueryCommands::Score(args) => {
-            query_score(args, &sdk, &dispatcher.output).await
-        }
-        ReputationQueryCommands::History(args) => {
-            query_history(args, &sdk, &dispatcher.output).await
-        }
+        ReputationQueryCommands::Score(args) => query_score(args, &dispatcher).await,
+        ReputationQueryCommands::History(args) => query_history(args, &dispatcher).await,
         ReputationQueryCommands::MilestoneStatus(args) => {
-            query_milestone_status(args, &sdk, &dispatcher.output).await
+            query_milestone_status(args, &dispatcher).await
         }
-        ReputationQueryCommands::Params => {
-            query_params(&sdk, &dispatcher.output).await
-        }
+        ReputationQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
-async fn query_score(
-    args: ScoreArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.reputation()
-        .query_and_print_optional(
-            output,
-            &format!("No reputation record found for agent {}", args.agent_hash),
-            |c| async move { c.query_score(&args.agent_hash).await },
-        )
+async fn query_score(args: ScoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_reputation_score(tonic::Request::new(
+            morpheum_proto::reputation::v1::QueryReputationScoreRequest {
+                agent_hash: args.agent_hash,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_reputation_score failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_history(
-    args: HistoryArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.reputation()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_history(&args.agent_hash, args.limit, args.offset).await
-        })
+async fn query_history(args: HistoryArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_reputation_history(tonic::Request::new(
+            morpheum_proto::reputation::v1::QueryReputationHistoryRequest {
+                agent_hash: args.agent_hash,
+                limit: args.limit,
+                offset: args.offset,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_reputation_history failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-/// Milestone status returns a direct `MilestoneStatus` (non-Optional),
-/// so `QueryClientExt::query_and_print_item` works cleanly.
 async fn query_milestone_status(
     args: MilestoneStatusArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.reputation()
-        .query_and_print_item(output, |c| async move {
-            c.query_milestone_status(&args.agent_hash).await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_milestone_status(tonic::Request::new(
+            morpheum_proto::reputation::v1::QueryMilestoneStatusRequest {
+                agent_hash: args.agent_hash,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_milestone_status failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.reputation()
-        .query_and_print_optional(
-            output,
-            "No reputation parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(
+            morpheum_proto::reputation::v1::QueryParamsRequest {},
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_params failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
