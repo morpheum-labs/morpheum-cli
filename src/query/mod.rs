@@ -3,128 +3,127 @@ use clap::Subcommand;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-#[cfg(feature = "modules")]
+#[cfg(feature = "identity")]
 pub mod identity;
-#[cfg(feature = "modules")]
+#[cfg(feature = "bank")]
 pub mod bank;
-#[cfg(feature = "modules")]
+#[cfg(feature = "reputation")]
 pub mod reputation;
-#[cfg(feature = "modules")]
+#[cfg(feature = "validation")]
 pub mod validation;
-#[cfg(feature = "modules")]
+#[cfg(feature = "memory")]
 pub mod memory;
-#[cfg(feature = "modules")]
+#[cfg(feature = "vc")]
 pub mod vc;
-#[cfg(feature = "modules")]
+#[cfg(feature = "intent")]
 pub mod intent;
-#[cfg(feature = "modules")]
+#[cfg(feature = "marketplace")]
 pub mod marketplace;
-#[cfg(feature = "modules")]
+#[cfg(feature = "job")]
 pub mod job;
-#[cfg(feature = "modules")]
+#[cfg(feature = "inference_registry")]
 pub mod inference_registry;
-#[cfg(feature = "modules")]
+#[cfg(feature = "agent_registry")]
 pub mod agent_registry;
-#[cfg(feature = "modules")]
+#[cfg(feature = "directory")]
 pub mod directory;
-#[cfg(feature = "modules")]
+#[cfg(feature = "interop")]
 pub mod interop;
-#[cfg(feature = "modules")]
+#[cfg(feature = "x402")]
 pub mod x402;
 
 /// On-chain query commands across all Morpheum modules.
 ///
-/// Symmetric counterpart to `TxCommands`. Gated behind the `modules`
-/// feature until the SDK crates expose the required query types.
+/// Symmetric counterpart to `TxCommands`, individually gated per module.
 #[derive(Subcommand)]
 pub enum QueryCommands {
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "identity")]
     #[command(subcommand)]
     Identity(identity::IdentityQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "bank")]
     #[command(subcommand)]
     Bank(bank::BankQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "reputation")]
     #[command(subcommand)]
     Reputation(reputation::ReputationQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "validation")]
     #[command(subcommand)]
     Validation(validation::ValidationQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "memory")]
     #[command(subcommand)]
     Memory(memory::MemoryQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "vc")]
     #[command(subcommand)]
     Vc(vc::VcQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "intent")]
     #[command(subcommand)]
     Intent(intent::IntentQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "marketplace")]
     #[command(subcommand)]
     Marketplace(marketplace::MarketplaceQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "job")]
     #[command(subcommand)]
     Job(job::JobQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "inference_registry")]
     #[command(subcommand)]
     InferenceRegistry(inference_registry::InferenceRegistryQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "agent_registry")]
     #[command(subcommand)]
     AgentRegistry(agent_registry::AgentRegistryQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "directory")]
     #[command(subcommand)]
     Directory(directory::DirectoryQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "interop")]
     #[command(subcommand)]
     Interop(interop::InteropQueryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "x402")]
     #[command(subcommand)]
     X402(x402::X402QueryCommands),
 }
 
 #[allow(clippy::unused_async)]
-pub async fn execute(cmd: QueryCommands, _dispatcher: Dispatcher) -> Result<(), CliError> {
+pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "identity")]
         QueryCommands::Identity(sub) => identity::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "bank")]
         QueryCommands::Bank(sub) => bank::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "reputation")]
         QueryCommands::Reputation(sub) => reputation::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "validation")]
         QueryCommands::Validation(sub) => validation::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "memory")]
         QueryCommands::Memory(sub) => memory::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "vc")]
         QueryCommands::Vc(sub) => vc::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "intent")]
         QueryCommands::Intent(sub) => intent::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "marketplace")]
         QueryCommands::Marketplace(sub) => marketplace::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "job")]
         QueryCommands::Job(sub) => job::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "inference_registry")]
         QueryCommands::InferenceRegistry(sub) => inference_registry::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "agent_registry")]
         QueryCommands::AgentRegistry(sub) => agent_registry::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "directory")]
         QueryCommands::Directory(sub) => directory::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "interop")]
         QueryCommands::Interop(sub) => interop::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "x402")]
         QueryCommands::X402(sub) => x402::execute(sub, dispatcher).await,
     }
 }

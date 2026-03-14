@@ -20,11 +20,17 @@ pub struct KeyringManager {
 }
 
 impl KeyringManager {
-    pub fn new(config: MorpheumConfig) -> Self {
-        let key_dir = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("."))
-            .join("morpheum")
-            .join("keys");
+    pub fn new(mut config: MorpheumConfig) -> Self {
+        let key_dir = match std::env::var("MORPHEUM_KEY_DIR") {
+            Ok(dir) => {
+                config.keyring_backend = "file".to_string();
+                PathBuf::from(dir)
+            }
+            Err(_) => dirs::config_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join("morpheum")
+                .join("keys"),
+        };
 
         let _ = fs::create_dir_all(&key_dir);
 
