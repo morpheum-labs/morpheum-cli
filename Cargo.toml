@@ -1,0 +1,91 @@
+[package]
+name = "morpheum-cli"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+authors = ["Morpheum Labs <team@morpheum.xyz>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/morpheum-labs/morpheum"
+homepage = "https://morpheum.xyz"
+description = "Official CLI for Morpheum — the sovereign AI-native L1."
+keywords = ["cli", "morpheum", "agent", "ai", "blockchain"]
+categories = ["command-line-utilities", "cryptography", "development-tools"]
+readme = "README.md"
+
+[[bin]]
+name = "morpheum"
+path = "src/main.rs"
+
+[dependencies]
+# ── Morpheum Core ──────────────────────────────────────────────────────────────
+morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
+    "full",
+    "identity",
+    "bank",
+    "agent_registry",
+    "inference_registry",
+    "interop",
+    "job",
+] }
+morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
+
+# ── CLI Framework ──────────────────────────────────────────────────────────────
+clap = { version = "4.5", features = ["derive", "env", "wrap_help", "unicode", "color"] }
+
+# ── Error Handling ─────────────────────────────────────────────────────────────
+thiserror = "2"
+
+# ── Rich Terminal Output & Diagnostics ─────────────────────────────────────────
+miette = { version = "7.2", features = ["fancy"] }
+tabled = { version = "0.17", features = ["ansi"] }
+colored = "2.1"
+serde_json = "1.0"
+
+# ── Configuration & Persistence ────────────────────────────────────────────────
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+confy = "0.6"
+
+# ── Secure Key Management ─────────────────────────────────────────────────────
+keyring = "3"
+secrecy = "0.8"
+
+# ── Async Runtime ──────────────────────────────────────────────────────────────
+tokio = { version = "1", features = ["full"] }
+
+# ── Observability ──────────────────────────────────────────────────────────────
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
+
+# ── Utilities ──────────────────────────────────────────────────────────────────
+dirs = "5.0"
+hex = "0.4"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+
+[features]
+default = []
+# Gate on-chain module commands until their SDK crates are fully wired.
+# Enable with: cargo build --features modules
+modules = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+
+[profile.dev]
+opt-level = 1
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
