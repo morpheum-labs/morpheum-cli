@@ -1,87 +1,169 @@
-//! Config loading and persistence for Morpheum CLI.
-
-use anyhow::{Context, Result};
+use clap::{Args, Subcommand, ValueEnum};
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
-/// CLI configuration (stored in ~/.morpheum/config.toml).
+use crate::dispatcher::Dispatcher;
+use crate::error::CliError;
+
+/// Output format preference for CLI commands (table vs JSON).
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ValueEnum)]
+#[serde(rename_all = "lowercase")]
+pub enum OutputFormat {
+    #[default]
+    Table,
+    Json,
+}
+
+/// Central configuration for the Morpheum CLI.
 ///
-/// **Security**: Mnemonic is NEVER stored in config. Use MORPHEUM_MNEMONIC env only.
+/// Loaded from `~/.config/morpheum/config.toml` via `confy`.
+/// Sensible production defaults are provided. Environment variables can override
+/// specific fields via the `clap` `env` attribute in `cli.rs`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Config {
-    /// RPC endpoint URL
-    #[serde(default = "default_rpc")]
-    pub rpc_endpoint: String,
-
-    /// Chain ID
+pub struct MorpheumConfig {
     #[serde(default = "default_chain_id")]
     pub chain_id: String,
 
-    /// Legacy: ignore mnemonic if present in old config files (never write it)
-    #[serde(skip_serializing, default)]
-    #[allow(dead_code)]
-    mnemonic: Option<String>,
+    #[serde(default = "default_rpc_url")]
+    pub rpc_url: String,
+
+    #[serde(default)]
+    pub default_output: OutputFormat,
+
+    #[serde(default = "default_timeout_secs")]
+    pub timeout_secs: u64,
+
+    #[serde(default = "default_keyring_backend")]
+    pub keyring_backend: String,
 }
 
-fn default_rpc() -> String {
-    "https://rpc.morpheum.xyz".to_string()
-}
-
-fn default_chain_id() -> String {
-    "morpheum-1".to_string()
-}
-
-impl Default for Config {
+impl Default for MorpheumConfig {
     fn default() -> Self {
         Self {
-            rpc_endpoint: default_rpc(),
             chain_id: default_chain_id(),
-            mnemonic: None,
+            rpc_url: default_rpc_url(),
+            default_output: OutputFormat::Table,
+            timeout_secs: default_timeout_secs(),
+            keyring_backend: default_keyring_backend(),
         }
     }
 }
 
-impl Config {
-    /// Load config from file, merging with defaults.
-    /// Returns default config if file doesn't exist.
-    pub fn load(path: &Path) -> Result<Self> {
-        if !path.exists() {
-            return Ok(Self::default());
-        }
-        let s = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read config: {}", path.display()))?;
-        let cfg: Self = toml::from_str(&s)
-            .with_context(|| format!("Failed to parse config: {}", path.display()))?;
-        Ok(cfg)
+impl MorpheumConfig {
+    /// Loads configuration from the standard location.
+    /// If the file does not exist, returns `Default` values.
+    pub fn load() -> Result<Self, CliError> {
+        let config: MorpheumConfig = confy::load("morpheum", None)
+            .map_err(CliError::Config)?;
+        Ok(config)
     }
 
-    /// Save config to file, creating parent dirs if needed.
-    pub fn save(&self, path: &Path) -> Result<()> {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)
-                .with_context(|| format!("Failed to create config dir: {}", parent.display()))?;
-        }
-        let s = toml::to_string_pretty(self)
-            .context("Failed to serialize config")?;
-        std::fs::write(path, s)
-            .with_context(|| format!("Failed to write config: {}", path.display()))?;
+    /// Saves the current configuration back to disk.
+    pub fn save(&self) -> Result<(), CliError> {
+        confy::store("morpheum", None, self)
+            .map_err(CliError::Config)?;
         Ok(())
     }
 
-    /// Get mnemonic from env only. Never from file (security).
-    pub fn mnemonic(&self) -> Option<String> {
-        std::env::var("MORPHEUM_MNEMONIC").ok()
+    /// Returns the full path to the config file (for user messaging).
+    pub fn config_path() -> PathBuf {
+        dirs::config_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("morpheum")
+            .join("config.toml")
     }
 }
 
-/// Default config directory (~/.morpheum).
-pub fn config_dir() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("."))
-        .join(".morpheum")
+// ── Default helpers ─────────────────────────────────────────────────────────
+
+fn default_chain_id() -> String {
+    "morpheum-test-1".to_string()
 }
 
-/// Default config file path.
-pub fn default_config_path() -> PathBuf {
-    config_dir().join("config.toml")
+fn default_rpc_url() -> String {
+    "https://sentry.morpheum.xyz".to_string()
+}
+
+fn default_timeout_secs() -> u64 {
+    30
+}
+
+fn default_keyring_backend() -> String {
+    "os".to_string()
+}
+
+// ── Config subcommands (`morpheum config show`, `morpheum config path`, etc.) ──
+
+#[derive(Subcommand)]
+pub enum ConfigCommands {
+    /// Display the current configuration
+    Show,
+
+    /// Print the path to the config file
+    Path,
+
+    /// Update a configuration value
+    Set(SetConfigArgs),
+
+    /// Reset configuration to defaults
+    Reset,
+}
+
+#[derive(Args)]
+pub struct SetConfigArgs {
+    /// Configuration key (e.g. `chain_id`, `rpc_url`, `keyring_backend`)
+    #[arg(required = true)]
+    pub key: String,
+
+    /// New value
+    #[arg(required = true)]
+    pub value: String,
+}
+
+#[allow(clippy::unused_async)]
+pub async fn execute(cmd: ConfigCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
+    let output = &dispatcher.output;
+
+    match cmd {
+        ConfigCommands::Show => {
+            output.info(format!("chain_id:        {}", dispatcher.config.chain_id));
+            output.info(format!("rpc_url:         {}", dispatcher.config.rpc_url));
+            output.info(format!("timeout_secs:    {}", dispatcher.config.timeout_secs));
+            output.info(format!("keyring_backend: {}", dispatcher.config.keyring_backend));
+            output.info(format!(
+                "default_output:  {:?}",
+                dispatcher.config.default_output
+            ));
+        }
+        ConfigCommands::Path => {
+            println!("{}", MorpheumConfig::config_path().display());
+        }
+        ConfigCommands::Set(args) => {
+            let mut config = dispatcher.config.clone();
+            let SetConfigArgs { key, value } = args;
+            match key.as_str() {
+                "chain_id" => config.chain_id.clone_from(&value),
+                "rpc_url" => config.rpc_url.clone_from(&value),
+                "timeout_secs" => {
+                    config.timeout_secs = value.parse().map_err(|_| {
+                        CliError::invalid_input("timeout_secs must be a positive integer")
+                    })?;
+                }
+                "keyring_backend" => config.keyring_backend.clone_from(&value),
+                _ => {
+                    return Err(CliError::invalid_input(format!(
+                        "Unknown config key: {key}"
+                    )));
+                }
+            }
+            config.save()?;
+            output.success(format!("Configuration updated: {key} = {value}"));
+        }
+        ConfigCommands::Reset => {
+            MorpheumConfig::default().save()?;
+            output.success("Configuration reset to defaults");
+        }
+    }
+
+    Ok(())
 }

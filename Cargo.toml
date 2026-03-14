@@ -2,44 +2,119 @@
 name = "morpheum-cli"
 version = "0.1.0"
 edition = "2021"
-description = "Human-friendly CLI for interacting with the Morpheum platform: issue VCs, manage agents, trade markets, identity, staking, DAO, etc."
-license = "MIT"
-repository = "https://github.com/morpheum-labs/morpheum-cli"
+rust-version = "1.80"
+authors = ["Morpheum Labs <team@morpheum.xyz>"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/morpheum-labs/morpheum"
 homepage = "https://morpheum.xyz"
-authors = ["Morpheum Labs <contact@morpheum.xyz>"]
-keywords = ["morpheum", "blockchain", "cli", "agent", "verifiable-credentials", "crypto"]
-categories = ["command-line-utilities", "cryptography"]
-
-[lib]
-name = "morpheum_cli"
-path = "src/lib.rs"
+description = "Official CLI for Morpheum — the sovereign AI-native L1."
+keywords = ["cli", "morpheum", "agent", "ai", "blockchain"]
+categories = ["command-line-utilities", "cryptography", "development-tools"]
+readme = "README.md"
 
 [[bin]]
 name = "morpheum"
 path = "src/main.rs"
 
 [dependencies]
-# Path for local dev (SDK requires sibling morpheum-proto + morpheum-signing).
-# For standalone: git = "https://github.com/morpheum-labs/morpheum-sdk", branch = "main"
-# (requires SDK to publish deps to crates.io or use git submodules)
-morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = ["full"] }
+# ── Morpheum Core ──────────────────────────────────────────────────────────────
+morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
+    "full",
+    "identity",
+    "bank",
+    "agent_registry",
+    "inference_registry",
+    "interop",
+    "job",
+    "reputation",
+    "validation",
+    "memory",
+    "intent",
+    "marketplace",
+    "directory",
+] }
+morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
+morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
 
-clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
-tokio = { version = "1.40", features = ["full"] }
-anyhow = "1.0.86"
-thiserror = "1.0"
+# ── gRPC Transport ────────────────────────────────────────────────────────────
+tonic = { version = "0.14", features = ["transport"] }
+
+# ── CLI Framework ──────────────────────────────────────────────────────────────
+clap = { version = "4.5", features = ["derive", "env", "wrap_help", "unicode", "color"] }
+
+# ── Error Handling ─────────────────────────────────────────────────────────────
+thiserror = "2"
+
+# ── Rich Terminal Output & Diagnostics ─────────────────────────────────────────
+miette = { version = "7.2", features = ["fancy"] }
+tabled = { version = "0.17", features = ["ansi"] }
 colored = "2.1"
-serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-dirs = "5.0"
+
+# ── Configuration & Persistence ────────────────────────────────────────────────
+serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
-rpassword = "7.3"
+confy = "0.6"
+
+# ── Secure Key Management ─────────────────────────────────────────────────────
+keyring = "3"
+secrecy = "0.8"
+
+# ── Async Runtime ──────────────────────────────────────────────────────────────
+tokio = { version = "1", features = ["full"] }
+
+# ── Observability ──────────────────────────────────────────────────────────────
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-shellexpand = "3.1"
-comfy-table = "7.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
+
+# ── Utilities ──────────────────────────────────────────────────────────────────
+dirs = "5.0"
 hex = "0.4"
 
 [dev-dependencies]
-assert_cmd = "2.0"
-predicates = "3.1"
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+
+[features]
+default = []
+# Internal: compiles shared gRPC transport + broadcast infrastructure.
+# Activated automatically by every module feature.
+_transport = []
+# Per-module feature gates — enable as SDK crates become ready.
+# Example: cargo build --features identity
+identity = ["_transport"]
+bank = ["_transport"]
+agent_registry = ["_transport"]
+inference_registry = ["_transport"]
+interop = ["_transport"]
+job = ["_transport"]
+reputation = ["_transport"]
+validation = ["_transport"]
+memory = ["_transport"]
+vc = ["_transport"]
+intent = ["_transport"]
+marketplace = ["_transport"]
+directory = ["_transport"]
+x402 = ["_transport"]
+# Enable all modules at once.
+modules = ["identity", "bank", "agent_registry", "inference_registry", "interop", "job",
+    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+debug = false
+
+[profile.dev]
+opt-level = 1
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
