@@ -42,6 +42,10 @@ struct Cli {
     #[arg(long, default_value = "human")]
     output: String,
 
+    /// Verbose logging (sets RUST_LOG=debug if unset)
+    #[arg(long, short = 'v')]
+    verbose: bool,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -147,11 +151,14 @@ fn is_json_output(output: &str) -> bool {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let cli = Cli::parse();
+
+    if cli.verbose && std::env::var("RUST_LOG").is_err() {
+        std::env::set_var("RUST_LOG", "morpheum_cli=debug,info");
+    }
     tracing_subscriber::fmt()
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
-
-    let cli = Cli::parse();
 
     let config_path = PathBuf::from(
         shellexpand::tilde(&cli.config.to_string_lossy()).into_owned(),
@@ -248,9 +255,12 @@ async fn run_vc(
                 return Ok(());
             }
 
-            let mnemonic = cfg
-                .mnemonic()
-                .ok_or_else(|| anyhow::anyhow!("No mnemonic. Set MORPHEUM_MNEMONIC env (never stored in config)"))?;
+            let mnemonic = cfg.mnemonic().filter(|s| !s.trim().is_empty()).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Mnemonic required. Set MORPHEUM_MNEMONIC env (never stored in config). \
+                     Example: export MORPHEUM_MNEMONIC=\"word1 word2 ... word12\""
+                )
+            })?;
 
             let signer = NativeSigner::from_mnemonic(&mnemonic, "")
                 .context("Invalid mnemonic")?;
@@ -266,11 +276,13 @@ async fn run_vc(
 
             let sdk = MorpheumSdk::new(&cfg.rpc_endpoint, cfg.chain_id.as_str());
 
+            // VcClaims for on-chain MsgIssue. Defaults: all pairs, 1% slippage, 10x position.
+            // TODO: expose --max-slippage, --allowed-pairs as CLI args for v0.2
             let vc_claims = VcClaims {
                 max_daily_usd: args.max_usd,
                 allowed_pairs_bitflags: u64::MAX,
                 max_slippage_bps: 100,
-                max_position_usd: args.max_usd * 10,
+                max_position_usd: args.max_usd.saturating_mul(10),
                 custom_constraints: None,
             };
 

@@ -2,6 +2,8 @@
 
 Human-friendly CLI for interacting with the Morpheum platform: issue VCs, manage agents, trade markets, identity, staking, DAO, etc.
 
+> **v0.1-alpha**: VC issuance is dry-run by default. Real broadcast is experimental — use testnet or low-value wallet only. The SDK uses a placeholder transport; production broadcast requires a real RPC transport.
+
 ## Install
 
 ```bash
@@ -30,7 +32,7 @@ morpheum vc issue --agent 0xabc... --broadcast
 morpheum vc issue --agent 0xabc... --broadcast --yes
 
 # JSON output (for scripting)
-morpheum --output json vc issue --agent 0xabc... --dry-run
+morpheum --output json vc issue --agent 0xabc...
 
 # Create a market order (table output)
 morpheum market order --market-id 42 --side buy --size 5 --price 42069
@@ -46,6 +48,13 @@ morpheum market order --market-id 42 --side buy --size 5 --price 42069
 
 - `--output human` (default): Colored text, tables for structured data
 - `--output json`: Machine-readable JSON for scripting
+
+## Verbose mode
+
+```bash
+morpheum -v vc issue --agent 0xabc...
+# or: RUST_LOG=debug morpheum vc issue ...
+```
 
 ## Security
 
