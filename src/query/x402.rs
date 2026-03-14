@@ -1,11 +1,10 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
+use morpheum_proto::bank::v1::query_client::QueryClient;
+use morpheum_proto::bank::v1::{QueryBalanceRequest, QueryBalancesRequest};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for native x402 payment protocol queries.
 ///
@@ -41,38 +40,44 @@ pub struct BalancesArgs {
 }
 
 pub async fn execute(cmd: X402QueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
-        X402QueryCommands::Balance(args) => {
-            query_balance(args, &sdk, &dispatcher.output).await
-        }
-        X402QueryCommands::Balances(args) => {
-            query_balances(args, &sdk, &dispatcher.output).await
-        }
+        X402QueryCommands::Balance(args) => query_balance(args, &dispatcher).await,
+        X402QueryCommands::Balances(args) => query_balances(args, &dispatcher).await,
     }
 }
 
-async fn query_balance(
-    args: BalanceArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.bank()
-        .query_and_print_item(output, |c| async move {
-            c.query_balance(&args.address, args.asset_index).await
-        })
+async fn query_balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_balance(tonic::Request::new(QueryBalanceRequest {
+            address: args.address,
+            asset_index: args.asset_index,
+            chain_type: None,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryBalance failed: {e}")))?
+        .into_inner();
+    let json =
+        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_balances(
-    args: BalancesArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.bank()
-        .query_and_print_list(output, |c| async move {
-            c.query_balances(&args.address).await
-        })
+async fn query_balances(args: BalancesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_balances(tonic::Request::new(QueryBalancesRequest {
+            address: args.address,
+            chain_type: None,
+            asset_type_filter: None,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryBalances failed: {e}")))?
+        .into_inner();
+    let json =
+        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }

@@ -26,6 +26,12 @@ morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
     "inference_registry",
     "interop",
     "job",
+    "reputation",
+    "validation",
+    "memory",
+    "intent",
+    "marketplace",
+    "directory",
 ] }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
 morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
@@ -72,23 +78,25 @@ predicates = "3"
 
 [features]
 default = []
+# Internal: compiles shared gRPC transport + broadcast infrastructure.
+# Activated automatically by every module feature.
+_transport = []
 # Per-module feature gates — enable as SDK crates become ready.
 # Example: cargo build --features identity
-identity = []
-bank = []
-agent_registry = []
-inference_registry = []
-interop = []
-job = []
-# Modules below are gated until their SDK crates wire the required types.
-reputation = []
-validation = []
-memory = []
-vc = []
-intent = []
-marketplace = []
-directory = []
-x402 = []
+identity = ["_transport"]
+bank = ["_transport"]
+agent_registry = ["_transport"]
+inference_registry = ["_transport"]
+interop = ["_transport"]
+job = ["_transport"]
+reputation = ["_transport"]
+validation = ["_transport"]
+memory = ["_transport"]
+vc = ["_transport"]
+intent = ["_transport"]
+marketplace = ["_transport"]
+directory = ["_transport"]
+x402 = ["_transport"]
 # Enable all modules at once.
 modules = ["identity", "bank", "agent_registry", "inference_registry", "interop", "job",
            "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402"]

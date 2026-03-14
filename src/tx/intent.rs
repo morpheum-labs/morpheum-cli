@@ -1,9 +1,10 @@
 use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::intent::{
-    SubmitIntentBuilder, CancelIntentBuilder, IntentType, IntentParams,
+    SubmitIntentBuilder, CancelIntentBuilder,
     ConditionalParams, TwapParams, DeclarativeParams,
 };
+use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -153,17 +154,16 @@ async fn submit_conditional(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let agent_sig = signer.public_key().as_bytes().to_vec();
+    let agent_sig = signer.public_key().to_proto_bytes();
 
-    let params = IntentParams::Conditional(ConditionalParams {
+    let params = ConditionalParams {
         condition: args.condition.clone(),
         action: args.action.clone(),
-    });
+    };
 
     let mut builder = SubmitIntentBuilder::new()
         .agent_hash(&args.agent_hash)
-        .intent_type(IntentType::Conditional)
-        .params(params)
+        .conditional(params)
         .agent_signature(agent_sig);
 
     if let Some(ref vc) = args.vc_proof {
@@ -173,15 +173,15 @@ async fn submit_conditional(
         builder = builder.expiry_timestamp(args.expiry);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Conditional intent submitted\nCondition: {}\nAction: {}\nTxHash: {}",
-        args.condition, args.action, result.txhash,
+        args.condition, args.action, txhash,
     ));
 
     Ok(())
@@ -189,9 +189,9 @@ async fn submit_conditional(
 
 async fn submit_twap(args: SubmitTwapArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let agent_sig = signer.public_key().as_bytes().to_vec();
+    let agent_sig = signer.public_key().to_proto_bytes();
 
-    let params = IntentParams::Twap(TwapParams {
+    let params = TwapParams {
         direction: args.direction.clone(),
         total_size: args.total_size,
         duration_ms: args.duration_ms,
@@ -199,22 +199,21 @@ async fn submit_twap(args: SubmitTwapArgs, dispatcher: &Dispatcher) -> Result<()
         slice_curve: String::new(),
         slippage_tolerance_bps: args.slippage_bps,
         rebalance_trigger: String::new(),
-    });
+    };
 
     let request = SubmitIntentBuilder::new()
         .agent_hash(&args.agent_hash)
-        .intent_type(IntentType::Twap)
-        .params(params)
+        .twap(params)
         .agent_signature(agent_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "TWAP intent submitted\n{} {} over {}ms in {} slices\nTxHash: {}",
-        args.direction, args.total_size, args.duration_ms, args.num_slices, result.txhash,
+        args.direction, args.total_size, args.duration_ms, args.num_slices, txhash,
     ));
 
     Ok(())
@@ -225,29 +224,28 @@ async fn submit_declarative(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let agent_sig = signer.public_key().as_bytes().to_vec();
+    let agent_sig = signer.public_key().to_proto_bytes();
 
-    let params = IntentParams::Declarative(DeclarativeParams {
+    let params = DeclarativeParams {
         raw_goal: args.goal.clone(),
         goal_embedding: Vec::new(),
         constraints: args.constraints.clone().unwrap_or_default(),
         preferred_style: args.style.clone(),
-    });
+    };
 
     let request = SubmitIntentBuilder::new()
         .agent_hash(&args.agent_hash)
-        .intent_type(IntentType::Declarative)
-        .params(params)
+        .declarative(params)
         .agent_signature(agent_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Declarative intent submitted\nGoal: {}\nStyle: {}\nTxHash: {}",
-        args.goal, args.style, result.txhash,
+        args.goal, args.style, txhash,
     ));
 
     Ok(())
@@ -255,21 +253,21 @@ async fn submit_declarative(
 
 async fn cancel(args: CancelArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let agent_sig = signer.public_key().as_bytes().to_vec();
+    let agent_sig = signer.public_key().to_proto_bytes();
 
     let request = CancelIntentBuilder::new()
         .intent_id(&args.intent_id)
         .agent_signature(agent_sig)
         .reason(&args.reason)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Intent {} cancelled\nReason: {}\nTxHash: {}",
-        args.intent_id, args.reason, result.txhash,
+        args.intent_id, args.reason, txhash,
     ));
 
     Ok(())

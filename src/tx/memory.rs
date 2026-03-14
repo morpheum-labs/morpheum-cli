@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::memory::{
     StoreEntryBuilder, UpdateEntryBuilder, DeleteEntryBuilder, MemoryEntryType,
 };
@@ -110,7 +111,7 @@ pub async fn execute(cmd: MemoryCommands, dispatcher: Dispatcher) -> Result<(), 
 
 async fn store(args: StoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().as_bytes().to_vec();
+    let owner_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = StoreEntryBuilder::new()
         .agent_hash(&args.agent_hash)
@@ -123,16 +124,16 @@ async fn store(args: StoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         builder = builder.expires_at(args.expires_at);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Memory entry stored\nAgent: {}, Key: {}\nType: {}\nTxHash: {}",
-        args.agent_hash, args.key, args.entry_type, result.txhash,
+        args.agent_hash, args.key, args.entry_type, txhash,
     ));
 
     Ok(())
@@ -140,7 +141,7 @@ async fn store(args: StoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 
 async fn update(args: UpdateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().as_bytes().to_vec();
+    let owner_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = UpdateEntryBuilder::new()
         .agent_hash(&args.agent_hash)
@@ -152,16 +153,16 @@ async fn update(args: UpdateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
         builder = builder.new_expires_at(expires);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Memory entry updated\nAgent: {}, Key: {}\nTxHash: {}",
-        args.agent_hash, args.key, result.txhash,
+        args.agent_hash, args.key, txhash,
     ));
 
     Ok(())
@@ -169,22 +170,23 @@ async fn update(args: UpdateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
 async fn delete(args: DeleteArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().as_bytes().to_vec();
+    let owner_sig = signer.public_key().to_proto_bytes();
 
     let request = DeleteEntryBuilder::new()
         .agent_hash(&args.agent_hash)
         .key(&args.key)
         .owner_signature(owner_sig)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Memory entry deleted\nAgent: {}, Key: {}\nTxHash: {}",
-        args.agent_hash, args.key, result.txhash,
+        args.agent_hash, args.key, txhash,
     ));
 
     Ok(())

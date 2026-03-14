@@ -94,7 +94,7 @@ pub enum QueryCommands {
     X402(x402::X402QueryCommands),
 }
 
-#[allow(clippy::unused_async)]
+#[allow(clippy::unused_async, unused_variables)]
 pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         #[cfg(feature = "identity")]

@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::directory::{
     UpdateProfileBuilder, UpdateVisibilityBuilder, VisibilityLevel,
 };
@@ -78,7 +79,7 @@ async fn update_profile(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().as_bytes().to_vec();
+    let owner_sig = signer.public_key().to_proto_bytes();
 
     let request = UpdateProfileBuilder::new()
         .agent_hash(&args.agent_hash)
@@ -86,15 +87,15 @@ async fn update_profile(
         .description(&args.description)
         .tags(&args.tags)
         .owner_signature(owner_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Profile updated for agent {}\nName: {}\nTxHash: {}",
-        args.agent_hash, args.display_name, result.txhash,
+        args.agent_hash, args.display_name, txhash,
     ));
 
     Ok(())
@@ -105,21 +106,21 @@ async fn update_visibility(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().as_bytes().to_vec();
+    let owner_sig = signer.public_key().to_proto_bytes();
 
     let request = UpdateVisibilityBuilder::new()
         .agent_hash(&args.agent_hash)
         .new_visibility(args.visibility)
         .owner_signature(owner_sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Visibility updated for agent {}\nNew level: {:?}\nTxHash: {}",
-        args.agent_hash, args.visibility, result.txhash,
+        args.agent_hash, args.visibility, txhash,
     ));
 
     Ok(())

@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::agent_registry::TriggerProtocolSyncBuilder;
 
 use crate::dispatcher::Dispatcher;
@@ -46,7 +47,7 @@ pub async fn execute(
 
 async fn trigger_sync(args: TriggerSyncArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let authority = signer.account_id().to_string();
+    let authority = hex::encode(signer.account_id().0);
 
     let agent_hash_bytes = hex::decode(&args.agent_hash)
         .map_err(|e| CliError::invalid_input(format!("invalid hex for agent_hash: {e}")))?;
@@ -55,9 +56,9 @@ async fn trigger_sync(args: TriggerSyncArgs, dispatcher: &Dispatcher) -> Result<
         .authority(&authority)
         .agent_hash(agent_hash_bytes)
         .protocols(args.protocols.clone())
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
@@ -65,7 +66,7 @@ async fn trigger_sync(args: TriggerSyncArgs, dispatcher: &Dispatcher) -> Result<
         "Protocol sync triggered for agent {}\nProtocols: {}\nTxHash: {}",
         args.agent_hash,
         args.protocols.join(", "),
-        result.txhash,
+        txhash,
     ));
 
     Ok(())

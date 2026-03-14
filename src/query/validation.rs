@@ -1,12 +1,9 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-use morpheum_sdk_native::validation::types::ProofType;
+use morpheum_proto::validation::v1::ProofType as ProtoProofType;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `validation` module.
 ///
@@ -49,9 +46,9 @@ pub struct ProofsByAgentArgs {
 
 #[derive(Args)]
 pub struct ProofsByTypeArgs {
-    /// Proof type (optimistic, zkml, tee-attestation, cross-validated)
+    /// Proof type (backtest, inference, human-eval, tee, external-validator, marketplace-eval, custom)
     #[arg(long, value_parser = parse_proof_type)]
-    pub proof_type: ProofType,
+    pub proof_type: ProtoProofType,
 
     #[arg(long, default_value = "20")]
     pub limit: u32,
@@ -64,82 +61,110 @@ pub async fn execute(
     cmd: ValidationQueryCommands,
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
-        ValidationQueryCommands::Proof(args) => {
-            query_proof(args, &sdk, &dispatcher.output).await
-        }
+        ValidationQueryCommands::Proof(args) => query_proof(args, &dispatcher).await,
         ValidationQueryCommands::ProofsByAgent(args) => {
-            query_proofs_by_agent(args, &sdk, &dispatcher.output).await
+            query_proofs_by_agent(args, &dispatcher).await
         }
         ValidationQueryCommands::ProofsByType(args) => {
-            query_proofs_by_type(args, &sdk, &dispatcher.output).await
+            query_proofs_by_type(args, &dispatcher).await
         }
-        ValidationQueryCommands::Params => {
-            query_params(&sdk, &dispatcher.output).await
-        }
+        ValidationQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
-async fn query_proof(
-    args: ProofArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.validation()
-        .query_and_print_optional(
-            output,
-            &format!("No proof found with ID {}", args.proof_id),
-            |c| async move { c.query_proof(&args.proof_id).await },
-        )
+async fn query_proof(args: ProofArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_proof(tonic::Request::new(
+            morpheum_proto::validation::v1::QueryProofRequest {
+                proof_id: args.proof_id,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_proof failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 async fn query_proofs_by_agent(
     args: ProofsByAgentArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.validation()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_proofs_by_agent(&args.agent_hash, args.limit, args.offset)
-                .await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_proofs_by_agent(tonic::Request::new(
+            morpheum_proto::validation::v1::QueryProofsByAgentRequest {
+                agent_hash: args.agent_hash,
+                limit: args.limit,
+                offset: args.offset,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_proofs_by_agent failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 async fn query_proofs_by_type(
     args: ProofsByTypeArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.validation()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_proofs_by_type(args.proof_type, args.limit, args.offset)
-                .await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_proofs_by_type(tonic::Request::new(
+            morpheum_proto::validation::v1::QueryProofsByTypeRequest {
+                proof_type: args.proof_type.into(),
+                limit: args.limit,
+                offset: args.offset,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_proofs_by_type failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.validation()
-        .query_and_print_optional(
-            output,
-            "No validation parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client =
+        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(
+            morpheum_proto::validation::v1::QueryParamsRequest {},
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("query_params failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-fn parse_proof_type(s: &str) -> Result<ProofType, String> {
+fn parse_proof_type(s: &str) -> Result<ProtoProofType, String> {
     match s.to_lowercase().as_str() {
-        "optimistic" => Ok(ProofType::Optimistic),
-        "zkml" => Ok(ProofType::ZkMl),
-        "tee-attestation" | "tee" => Ok(ProofType::TeeAttestation),
-        "cross-validated" | "crossvalidated" => Ok(ProofType::CrossValidated),
+        "backtest" => Ok(ProtoProofType::Backtest),
+        "inference" => Ok(ProtoProofType::Inference),
+        "human-eval" | "humaneval" => Ok(ProtoProofType::HumanEval),
+        "tee" | "tee-attestation" => Ok(ProtoProofType::TeeAttestation),
+        "external-validator" | "external" => Ok(ProtoProofType::ExternalValidator),
+        "marketplace-eval" | "marketplace" => Ok(ProtoProofType::MarketplaceEval),
+        "custom" => Ok(ProtoProofType::Custom),
         other => Err(format!(
-            "unknown proof type '{other}'; expected: optimistic, zkml, tee-attestation, cross-validated"
+            "unknown proof type '{other}'; expected: backtest, inference, \
+             human-eval, tee, external-validator, marketplace-eval, custom"
         )),
     }
 }

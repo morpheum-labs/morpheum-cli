@@ -1,12 +1,12 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-use morpheum_sdk_native::job::types::JobState;
+use morpheum_proto::job::v1::{JobState, QueryJobRequest, QueryJobsByClientRequest,
+    QueryJobsByProviderRequest, QueryJobsByEvaluatorRequest, QueryActiveJobsRequest,
+    QueryJobsByStateRequest, QueryParamsRequest};
+use morpheum_proto::job::v1::query_client::QueryClient;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `job` module (ERC-8183 compatible).
 ///
@@ -91,129 +91,150 @@ pub struct ByStateArgs {
 }
 
 pub async fn execute(cmd: JobQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
-        JobQueryCommands::Get(args) => query_job(args, &sdk, &dispatcher.output).await,
-        JobQueryCommands::ByClient(args) => {
-            query_by_client(args, &sdk, &dispatcher.output).await
-        }
-        JobQueryCommands::ByProvider(args) => {
-            query_by_provider(args, &sdk, &dispatcher.output).await
-        }
-        JobQueryCommands::ByEvaluator(args) => {
-            query_by_evaluator(args, &sdk, &dispatcher.output).await
-        }
-        JobQueryCommands::Active(args) => {
-            query_active(args, &sdk, &dispatcher.output).await
-        }
-        JobQueryCommands::ByState(args) => {
-            query_by_state(args, &sdk, &dispatcher.output).await
-        }
-        JobQueryCommands::Params => query_params(&sdk, &dispatcher.output).await,
+        JobQueryCommands::Get(args) => query_job(args, &dispatcher).await,
+        JobQueryCommands::ByClient(args) => query_by_client(args, &dispatcher).await,
+        JobQueryCommands::ByProvider(args) => query_by_provider(args, &dispatcher).await,
+        JobQueryCommands::ByEvaluator(args) => query_by_evaluator(args, &dispatcher).await,
+        JobQueryCommands::Active(args) => query_active(args, &dispatcher).await,
+        JobQueryCommands::ByState(args) => query_by_state(args, &dispatcher).await,
+        JobQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
-async fn query_job(
-    args: GetArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_optional(
-            output,
-            &format!("No job found with ID {}", args.job_id),
-            |c| async move { c.query_job(&args.job_id).await },
-        )
+async fn query_job(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let job_id = args.job_id.clone();
+    let response = client
+        .query_job(tonic::Request::new(QueryJobRequest {
+            job_id: args.job_id,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryJob failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.found {
+        println!("{json}");
+    } else {
+        println!("No job found with ID {job_id}");
+    }
+    Ok(())
 }
 
-async fn query_by_client(
-    args: ByRoleArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_list(output, |c| async move {
-            c.query_jobs_by_client(&args.agent_hash, args.state, args.limit, args.offset)
-                .await
-        })
+async fn query_by_client(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_jobs_by_client(tonic::Request::new(QueryJobsByClientRequest {
+            client_agent_hash: args.agent_hash,
+            state: args.state.map_or(0, Into::into),
+            limit: args.limit,
+            offset: args.offset,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryJobsByClient failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_by_provider(
-    args: ByRoleArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_list(output, |c| async move {
-            c.query_jobs_by_provider(&args.agent_hash, args.state, args.limit, args.offset)
-                .await
-        })
+async fn query_by_provider(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_jobs_by_provider(tonic::Request::new(QueryJobsByProviderRequest {
+            provider_agent_hash: args.agent_hash,
+            state: args.state.map_or(0, Into::into),
+            limit: args.limit,
+            offset: args.offset,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryJobsByProvider failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_by_evaluator(
-    args: ByRoleArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_list(output, |c| async move {
-            c.query_jobs_by_evaluator(&args.agent_hash, args.state, args.limit, args.offset)
-                .await
-        })
+async fn query_by_evaluator(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_jobs_by_evaluator(tonic::Request::new(QueryJobsByEvaluatorRequest {
+            evaluator_agent_hash: args.agent_hash,
+            state: args.state.map_or(0, Into::into),
+            limit: args.limit,
+            offset: args.offset,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryJobsByEvaluator failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_active(
-    args: ActiveArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_list(output, |c| async move {
-            c.query_active_jobs(args.client, args.provider, args.limit, args.offset)
-                .await
-        })
+async fn query_active(args: ActiveArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_active_jobs(tonic::Request::new(QueryActiveJobsRequest {
+            client_agent_hash: args.client.unwrap_or_default(),
+            provider_agent_hash: args.provider.unwrap_or_default(),
+            limit: args.limit,
+            offset: args.offset,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryActiveJobs failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_by_state(
-    args: ByStateArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_list(output, |c| async move {
-            c.query_jobs_by_state(args.state, args.limit, args.offset)
-                .await
-        })
+async fn query_by_state(args: ByStateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_jobs_by_state(tonic::Request::new(QueryJobsByStateRequest {
+            state: args.state.into(),
+            limit: args.limit,
+            offset: args.offset,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryJobsByState failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-/// `query_params` returns `Result<JobParams, SdkError>` (non-Optional).
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.job()
-        .query_and_print_item(output, |c| async move { c.query_params().await })
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(QueryParamsRequest {}))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 fn parse_job_state(s: &str) -> Result<JobState, String> {
     match s.to_lowercase().as_str() {
-        "created" => Ok(JobState::Created),
+        "open" => Ok(JobState::Open),
         "funded" => Ok(JobState::Funded),
-        "active" => Ok(JobState::Active),
-        "delivered" => Ok(JobState::Delivered),
-        "attested" => Ok(JobState::Attested),
+        "submitted" => Ok(JobState::Submitted),
         "completed" => Ok(JobState::Completed),
-        "disputed" => Ok(JobState::Disputed),
+        "rejected" => Ok(JobState::Rejected),
+        "expired" => Ok(JobState::Expired),
         "cancelled" => Ok(JobState::Cancelled),
-        "refunded" => Ok(JobState::Refunded),
         other => Err(format!(
-            "unknown job state '{other}'; expected: created, funded, active, delivered, \
-             attested, completed, disputed, cancelled, refunded"
+            "unknown job state '{other}'; expected: open, funded, submitted, completed, rejected, expired, cancelled"
         )),
     }
 }

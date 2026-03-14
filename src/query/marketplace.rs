@@ -1,11 +1,7 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `marketplace` module.
 ///
@@ -59,67 +55,93 @@ pub async fn execute(
     cmd: MarketplaceQueryCommands,
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
-        MarketplaceQueryCommands::Listing(args) => {
-            query_listing(args, &sdk, &dispatcher.output).await
-        }
+        MarketplaceQueryCommands::Listing(args) => query_listing(args, &dispatcher).await,
         MarketplaceQueryCommands::ActiveListings(args) => {
-            query_active_listings(args, &sdk, &dispatcher.output).await
+            query_active_listings(args, &dispatcher).await
         }
         MarketplaceQueryCommands::BidsByListing(args) => {
-            query_bids_by_listing(args, &sdk, &dispatcher.output).await
+            query_bids_by_listing(args, &dispatcher).await
         }
-        MarketplaceQueryCommands::Params => query_params(&sdk, &dispatcher.output).await,
+        MarketplaceQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
-async fn query_listing(
-    args: ListingArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.marketplace()
-        .query_and_print_optional(
-            output,
-            &format!("No listing found with ID {}", args.listing_id),
-            |c| async move { c.query_listing(&args.listing_id).await },
-        )
+async fn query_listing(args: ListingArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = morpheum_proto::marketplace::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_listing(tonic::Request::new(
+            morpheum_proto::marketplace::v1::QueryListingRequest {
+                listing_id: args.listing_id,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryListing failed: {e}")))?
+        .into_inner();
+    let json =
+        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 async fn query_active_listings(
     args: ActiveListingsArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.marketplace()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_active_listings(args.limit, args.offset).await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = morpheum_proto::marketplace::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_active_listings(tonic::Request::new(
+            morpheum_proto::marketplace::v1::QueryActiveListingsRequest {
+                limit: args.limit,
+                offset: args.offset,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryActiveListings failed: {e}")))?
+        .into_inner();
+    let json =
+        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
 async fn query_bids_by_listing(
     args: BidsByListingArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.marketplace()
-        .query_and_print_paginated(output, |c| async move {
-            c.query_bids_by_listing(&args.listing_id, args.limit, args.offset)
-                .await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = morpheum_proto::marketplace::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_bids_by_listing(tonic::Request::new(
+            morpheum_proto::marketplace::v1::QueryBidsByListingRequest {
+                listing_id: args.listing_id,
+                limit: args.limit,
+                offset: args.offset,
+            },
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryBidsByListing failed: {e}")))?
+        .into_inner();
+    let json =
+        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.marketplace()
-        .query_and_print_optional(
-            output,
-            "No marketplace parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = morpheum_proto::marketplace::v1::query_client::QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(
+            morpheum_proto::marketplace::v1::QueryParamsRequest::default(),
+        ))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
+        .into_inner();
+    let json =
+        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }

@@ -1,12 +1,13 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::MorpheumSdk;
-use morpheum_sdk_native::inference_registry::types::QuantFormat;
+use morpheum_proto::inference_registry::v1::query_client::QueryClient;
+use morpheum_proto::inference_registry::v1::{
+    QuantFormat, QueryModelRequest, QueryModelsByQuantRequest,
+    QueryActiveModelsRequest, QueryParamsRequest,
+};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
 /// Query commands for the `inference_registry` module.
 ///
@@ -36,7 +37,7 @@ pub struct ModelArgs {
 
 #[derive(Args)]
 pub struct ModelsByQuantArgs {
-    /// Quantization format (fp16, q4km, q5km, q8, gguf)
+    /// Quantization format (fp16, q4km, q5km, q80)
     #[arg(required = true, value_parser = parse_quant_format)]
     pub quant_format: QuantFormat,
 }
@@ -45,75 +46,98 @@ pub async fn execute(
     cmd: InferenceRegistryQueryCommands,
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
-    let sdk = MorpheumSdk::new(&dispatcher.config.rpc_url, &dispatcher.config.chain_id);
-
     match cmd {
         InferenceRegistryQueryCommands::Model(args) => {
-            query_model(args, &sdk, &dispatcher.output).await
+            query_model(args, &dispatcher).await
         }
         InferenceRegistryQueryCommands::ModelsByQuant(args) => {
-            query_models_by_quant(args, &sdk, &dispatcher.output).await
+            query_models_by_quant(args, &dispatcher).await
         }
         InferenceRegistryQueryCommands::ActiveModels => {
-            query_active_models(&sdk, &dispatcher.output).await
+            query_active_models(&dispatcher).await
         }
         InferenceRegistryQueryCommands::Params => {
-            query_params(&sdk, &dispatcher.output).await
+            query_params(&dispatcher).await
         }
     }
 }
 
-async fn query_model(
-    args: ModelArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.inference_registry()
-        .query_and_print_optional(
-            output,
-            &format!("No model found with ID {}", args.model_id),
-            |c| async move { c.query_model(&args.model_id).await },
-        )
+async fn query_model(args: ModelArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let model_id = args.model_id.clone();
+    let response = client
+        .query_model(tonic::Request::new(QueryModelRequest {
+            model_id: args.model_id,
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryModel failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.model.is_some() {
+        println!("{json}");
+    } else {
+        println!("No model found with ID {model_id}");
+    }
+    Ok(())
 }
 
 async fn query_models_by_quant(
     args: ModelsByQuantArgs,
-    sdk: &MorpheumSdk,
-    output: &Output,
+    dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    sdk.inference_registry()
-        .query_and_print_list(output, |c| async move {
-            c.query_models_by_quant(args.quant_format).await
-        })
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_models_by_quant(tonic::Request::new(QueryModelsByQuantRequest {
+            quant_format: args.quant_format.into(),
+        }))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryModelsByQuant failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_active_models(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.inference_registry()
-        .query_and_print_list(output, |c| async move { c.query_active_models().await })
+async fn query_active_models(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_active_models(tonic::Request::new(QueryActiveModelsRequest {}))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryActiveModels failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+    Ok(())
 }
 
-async fn query_params(sdk: &MorpheumSdk, output: &Output) -> Result<(), CliError> {
-    sdk.inference_registry()
-        .query_and_print_optional(
-            output,
-            "No inference registry parameters configured",
-            |c| async move { c.query_params().await },
-        )
+async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = QueryClient::new(channel);
+    let response = client
+        .query_params(tonic::Request::new(QueryParamsRequest {}))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
+        .into_inner();
+    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    if response.params.is_some() {
+        println!("{json}");
+    } else {
+        println!("No inference registry parameters configured");
+    }
+    Ok(())
 }
 
 fn parse_quant_format(s: &str) -> Result<QuantFormat, String> {
     match s.to_lowercase().as_str() {
-        "fp16" => Ok(QuantFormat::Fp16),
+        "fp16" | "f16" => Ok(QuantFormat::Fp16),
         "q4km" | "q4_k_m" => Ok(QuantFormat::Q4KM),
         "q5km" | "q5_k_m" => Ok(QuantFormat::Q5KM),
-        "q8" | "q8_0" => Ok(QuantFormat::Q8),
-        "gguf" => Ok(QuantFormat::Gguf),
+        "q80" | "q8_0" => Ok(QuantFormat::Q80),
         other => Err(format!(
-            "unknown quant format '{other}'; expected: fp16, q4km, q5km, q8, gguf"
+            "unknown quant format '{other}'; expected: fp16, q4km, q5km, q80"
         )),
     }
 }

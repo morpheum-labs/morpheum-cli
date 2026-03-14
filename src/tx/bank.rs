@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::bank::{
     TransferBuilder, CrossChainTransferBuilder, TransferToBucketBuilder,
     MintBuilder, OnboardAssetBuilder, WithdrawBuilder,
@@ -180,7 +181,7 @@ pub async fn execute(cmd: BankCommands, dispatcher: Dispatcher) -> Result<(), Cl
 
 async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = signer.account_id().to_string();
+    let from_address = hex::encode(signer.account_id().0);
 
     let request = TransferBuilder::new()
         .from_address(&from_address)
@@ -188,16 +189,17 @@ async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .amount(&args.amount)
         .asset_index(args.asset_index)
         .memo(args.memo.as_deref().unwrap_or_default())
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Transfer complete\nTo: {}\nAmount: {} (asset {})\nTxHash: {}",
-        args.to, args.amount, args.asset_index, result.txhash,
+        args.to, args.amount, args.asset_index, txhash,
     ));
 
     Ok(())
@@ -208,7 +210,7 @@ async fn cross_chain_send(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = signer.account_id().to_string();
+    let from_address = hex::encode(signer.account_id().0);
 
     let asset = parse_asset_identifier(&args.asset);
 
@@ -219,16 +221,17 @@ async fn cross_chain_send(
         .amount(&args.amount)
         .asset(asset)
         .memo(args.memo.as_deref().unwrap_or_default())
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Cross-chain transfer initiated\nTo: {} on {:?}\nAmount: {}\nTxHash: {}",
-        args.to, args.target_chain, args.amount, result.txhash,
+        args.to, args.target_chain, args.amount, txhash,
     ));
 
     Ok(())
@@ -239,23 +242,24 @@ async fn transfer_to_bucket(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let address = signer.account_id().to_string();
+    let address = hex::encode(signer.account_id().0);
 
     let request = TransferToBucketBuilder::new()
         .address(&address)
         .bucket_id(&args.bucket_id)
         .asset_index(args.asset_index)
         .amount(&args.amount)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Deposited {} (asset {}) into bucket {}\nTxHash: {}",
-        args.amount, args.asset_index, args.bucket_id, result.txhash,
+        args.amount, args.asset_index, args.bucket_id, txhash,
     ));
 
     Ok(())
@@ -273,16 +277,16 @@ async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         builder = builder.module_account(module);
     }
 
-    let request = builder.build()?;
+    let request = builder.build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Minted {} (asset {}) to {}\nTxHash: {}",
-        args.amount, args.asset_index, args.recipient, result.txhash,
+        args.amount, args.asset_index, args.recipient, txhash,
     ));
 
     Ok(())
@@ -290,7 +294,7 @@ async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = signer.account_id().to_string();
+    let from_address = hex::encode(signer.account_id().0);
 
     let request = OnboardAssetBuilder::new()
         .from_address(&from_address)
@@ -298,16 +302,17 @@ async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Resul
         .asset_symbol(&args.symbol)
         .asset_type(args.asset_type)
         .initial_supply(&args.initial_supply)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Asset onboarded: {} ({})\nType: {}, Supply: {}\nTxHash: {}",
-        args.name, args.symbol, args.asset_type, args.initial_supply, result.txhash,
+        args.name, args.symbol, args.asset_type, args.initial_supply, txhash,
     ));
 
     Ok(())
@@ -315,7 +320,7 @@ async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Resul
 
 async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = signer.account_id().to_string();
+    let from_address = hex::encode(signer.account_id().0);
 
     let asset = parse_asset_identifier(&args.asset);
 
@@ -326,9 +331,10 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
         .destination_chain(args.destination_chain)
         .destination_address(&args.destination_address)
         .fast_withdrawal(args.fast)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), None,
     )
     .await?;
@@ -339,7 +345,7 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
         args.destination_chain,
         args.amount,
         if args.fast { " (fast)" } else { "" },
-        result.txhash,
+        txhash,
     ));
 
     Ok(())

@@ -9,6 +9,7 @@ mod output;
 mod status;
 mod tx;
 mod query;
+#[cfg(feature = "_transport")]
 mod transport;
 mod utils;
 mod mwvm;

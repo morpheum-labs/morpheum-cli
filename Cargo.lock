@@ -1736,6 +1736,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-directory"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
 name = "morpheum-sdk-identity"
 version = "0.1.0"
 dependencies = [
@@ -1751,6 +1761,16 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "hex",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
+name = "morpheum-sdk-intent"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
  "morpheum-proto",
  "morpheum-sdk-core",
  "prost 0.14.3",
@@ -1787,6 +1807,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-marketplace"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
+name = "morpheum-sdk-memory"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
 name = "morpheum-sdk-native"
 version = "0.1.0"
 dependencies = [
@@ -1796,12 +1836,18 @@ dependencies = [
  "morpheum-sdk-auth",
  "morpheum-sdk-bank",
  "morpheum-sdk-core",
+ "morpheum-sdk-directory",
  "morpheum-sdk-identity",
  "morpheum-sdk-inference-registry",
+ "morpheum-sdk-intent",
  "morpheum-sdk-interop",
  "morpheum-sdk-job",
  "morpheum-sdk-market",
+ "morpheum-sdk-marketplace",
+ "morpheum-sdk-memory",
+ "morpheum-sdk-reputation",
  "morpheum-sdk-staking",
+ "morpheum-sdk-validation",
  "morpheum-sdk-vc",
  "morpheum-signing-native",
  "reqwest",
@@ -1812,7 +1858,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-reputation"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
 name = "morpheum-sdk-staking"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
+name = "morpheum-sdk-validation"
 version = "0.1.0"
 dependencies = [
  "async-trait",

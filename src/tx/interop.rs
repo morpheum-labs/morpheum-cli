@@ -1,8 +1,9 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::interop::{
     BridgeRequestBuilder, ExportIntentBuilder, ExportProofBuilder,
-    BridgePayload, IntentExportPacket, CrossChainProofPacket,
+    CrossChainProofPacket,
 };
 
 use crate::dispatcher::Dispatcher;
@@ -111,21 +112,21 @@ pub async fn execute(cmd: InteropCommands, dispatcher: Dispatcher) -> Result<(),
 
 async fn bridge(args: BridgeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let signer_bytes = signer.public_key().as_bytes().to_vec();
+    let signer_bytes = signer.public_key().to_proto_bytes();
 
     let request = BridgeRequestBuilder::new()
         .source_chain(&args.source_chain)
         .target_chain(&args.target_chain)
         .signer(signer_bytes)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Bridge request submitted\n{} -> {}\nTxHash: {}",
-        args.source_chain, args.target_chain, result.txhash,
+        args.source_chain, args.target_chain, txhash,
     ));
 
     Ok(())
@@ -136,7 +137,7 @@ async fn export_intent(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let sig = signer.public_key().as_bytes().to_vec();
+    let sig = signer.public_key().to_proto_bytes();
 
     let intent_data = hex::decode(&args.intent_data)
         .map_err(|e| CliError::invalid_input(format!("invalid hex for intent_data: {e}")))?;
@@ -148,15 +149,15 @@ async fn export_intent(
         .intent_data(intent_data)
         .signature(sig.clone())
         .signer(sig)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Intent {} exported to {}\nTxHash: {}",
-        args.intent_id, args.target_chain, result.txhash,
+        args.intent_id, args.target_chain, txhash,
     ));
 
     Ok(())
@@ -164,7 +165,7 @@ async fn export_intent(
 
 async fn export_proof(args: ExportProofArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let signer_bytes = signer.public_key().as_bytes().to_vec();
+    let signer_bytes = signer.public_key().to_proto_bytes();
 
     let proof_packet = CrossChainProofPacket {
         source_chain: args.source_chain.clone(),
@@ -178,15 +179,15 @@ async fn export_proof(args: ExportProofArgs, dispatcher: &Dispatcher) -> Result<
     let request = ExportProofBuilder::new()
         .proof_packet(proof_packet)
         .signer(signer_bytes)
-        .build()?;
+        .build().map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     ).await?;
 
     dispatcher.output.success(format!(
         "Proof exported for agent {}\n{} -> {}\nTxHash: {}",
-        args.agent_hash, args.source_chain, args.target_chain, result.txhash,
+        args.agent_hash, args.source_chain, args.target_chain, txhash,
     ));
 
     Ok(())

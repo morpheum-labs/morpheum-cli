@@ -1,5 +1,6 @@
 use clap::{Args, Subcommand};
 
+use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::validation::{
     SubmitProofBuilder, RevokeProofBuilder, ProofType,
 };
@@ -79,7 +80,7 @@ pub async fn execute(cmd: ValidationCommands, dispatcher: Dispatcher) -> Result<
 
 async fn submit_proof(args: SubmitProofArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let verifier_sig = signer.public_key().as_bytes().to_vec();
+    let verifier_sig = signer.public_key().to_proto_bytes();
 
     let request = SubmitProofBuilder::new()
         .agent_hash(&args.agent_hash)
@@ -87,16 +88,17 @@ async fn submit_proof(args: SubmitProofArgs, dispatcher: &Dispatcher) -> Result<
         .score_contribution(args.score)
         .data_hash(&args.data_hash)
         .verifier_signature(verifier_sig)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Proof submitted for agent {}\nType: {}, Score: {}\nTxHash: {}",
-        args.agent_hash, args.proof_type, args.score, result.txhash,
+        args.agent_hash, args.proof_type, args.score, txhash,
     ));
 
     Ok(())
@@ -104,23 +106,24 @@ async fn submit_proof(args: SubmitProofArgs, dispatcher: &Dispatcher) -> Result<
 
 async fn revoke_proof(args: RevokeProofArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let verifier_sig = signer.public_key().as_bytes().to_vec();
+    let verifier_sig = signer.public_key().to_proto_bytes();
 
     let request = RevokeProofBuilder::new()
         .proof_id(&args.proof_id)
         .verifier_agent_hash(&args.verifier_hash)
         .verifier_signature(verifier_sig)
         .reason(&args.reason)
-        .build()?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let result = crate::utils::sign_and_broadcast(
+    let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
     )
     .await?;
 
     dispatcher.output.success(format!(
         "Proof {} revoked\nReason: {}\nTxHash: {}",
-        args.proof_id, args.reason, result.txhash,
+        args.proof_id, args.reason, txhash,
     ));
 
     Ok(())
