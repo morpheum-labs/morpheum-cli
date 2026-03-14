@@ -28,6 +28,10 @@ morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
     "job",
 ] }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
+morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
+
+# ── gRPC Transport ────────────────────────────────────────────────────────────
+tonic = { version = "0.14", features = ["transport"] }
 
 # ── CLI Framework ──────────────────────────────────────────────────────────────
 clap = { version = "4.5", features = ["derive", "env", "wrap_help", "unicode", "color"] }
@@ -68,9 +72,26 @@ predicates = "3"
 
 [features]
 default = []
-# Gate on-chain module commands until their SDK crates are fully wired.
-# Enable with: cargo build --features modules
-modules = []
+# Per-module feature gates — enable as SDK crates become ready.
+# Example: cargo build --features identity
+identity = []
+bank = []
+agent_registry = []
+inference_registry = []
+interop = []
+job = []
+# Modules below are gated until their SDK crates wire the required types.
+reputation = []
+validation = []
+memory = []
+vc = []
+intent = []
+marketplace = []
+directory = []
+x402 = []
+# Enable all modules at once.
+modules = ["identity", "bank", "agent_registry", "inference_registry", "interop", "job",
+           "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402"]
 
 [profile.release]
 opt-level = 3

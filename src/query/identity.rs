@@ -1,71 +1,61 @@
 use clap::{Args, Subcommand};
+
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::output::Output;
-use crate::utils::QueryClientExt;
 
-/// Query commands for the `identity` module (ERC-8004 Identity Registry).
-///
-/// These commands provide rich, permissioned read access to agent identities,
-/// metadata, capabilities, ownership, and CAIP-10 portability information.
-///
-/// Fully consistent with the tx side and Pillar 3 trust layer.
+/// Query commands for the `identity` module.
 #[derive(Subcommand)]
 pub enum IdentityQueryCommands {
-    /// Get a complete agent identity record
+    /// Get a complete agent identity record by DID or hash
     Get(GetArgs),
-
-    /// Query an agent by its CAIP-10 identifier (cross-chain portable)
-    ByCaip(ByCaipArgs),
 }
 
 #[derive(Args)]
 pub struct GetArgs {
-    /// Agent DID or native AgentId (e.g. did:agent:alpha-trader-v3)
+    /// Agent DID or hash (e.g. did:agent:alpha-trader-v3)
     #[arg(required = true)]
     pub id: String,
 }
 
-#[derive(Args)]
-pub struct ByCaipArgs {
-    /// CAIP-10 identifier (e.g. morpheum:1:agent-0x...)
-    #[arg(required = true)]
-    pub caip: String,
-}
-
-/// Execute identity query commands.
 pub async fn execute(cmd: IdentityQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
-    let sdk = morpheum_sdk_native::MorpheumSdk::new(
-        &dispatcher.config.rpc_url,
-        &dispatcher.config.chain_id,
-    );
-
     match cmd {
-        IdentityQueryCommands::Get(args) => get_agent(args, &sdk, &dispatcher.output).await,
-        IdentityQueryCommands::ByCaip(args) => get_by_caip(args, &sdk, &dispatcher.output).await,
+        IdentityQueryCommands::Get(args) => get_agent(args, &dispatcher).await,
     }
 }
 
-async fn get_agent(
-    args: GetArgs,
-    sdk: &morpheum_sdk_native::MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.identity()
-        .query_and_print_item(output, |c| async move {
-            c.query_agent_record(&args.id).await
-        })
-        .await
-}
+async fn get_agent(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
 
-async fn get_by_caip(
-    args: ByCaipArgs,
-    sdk: &morpheum_sdk_native::MorpheumSdk,
-    output: &Output,
-) -> Result<(), CliError> {
-    sdk.identity()
-        .query_and_print_item(output, |c| async move {
-            c.query_agent_by_caip(&args.caip).await
-        })
+    let mut client =
+        morpheum_proto::identity::v1::query_client::QueryClient::new(channel);
+
+    let (agent_hash, did) = if args.id.starts_with("did:") {
+        (String::new(), args.id.clone())
+    } else {
+        (args.id.clone(), String::new())
+    };
+
+    let request = morpheum_proto::identity::v1::QueryAgentRequest {
+        agent_hash,
+        did,
+    };
+
+    let response = client
+        .query_agent(tonic::Request::new(request))
         .await
+        .map_err(|e| CliError::Transport(format!("QueryAgent failed: {e}")))?
+        .into_inner();
+
+    if !response.found {
+        return Err(CliError::Transport(format!(
+            "agent '{}' not found",
+            args.id
+        )));
+    }
+
+    let json = serde_json::to_string_pretty(&response)
+        .unwrap_or_else(|_| format!("{response:?}"));
+    println!("{json}");
+
+    Ok(())
 }

@@ -49,7 +49,8 @@ impl Output {
         }
     }
 
-    fn print_json<T: Serialize + ?Sized>(&self, value: &T) -> io::Result<()> {
+    /// Prints a value as pretty-printed JSON to stdout.
+    pub fn print_json<T: Serialize + ?Sized>(&self, value: &T) -> io::Result<()> {
         let json = serde_json::to_string_pretty(value)
             .map_err(io::Error::other)?;
         println!("{json}");

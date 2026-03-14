@@ -9,6 +9,7 @@ mod output;
 mod status;
 mod tx;
 mod query;
+mod transport;
 mod utils;
 mod mwvm;
 mod mcp;

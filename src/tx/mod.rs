@@ -3,128 +3,128 @@ use clap::Subcommand;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-#[cfg(feature = "modules")]
+#[cfg(feature = "identity")]
 pub mod identity;
-#[cfg(feature = "modules")]
+#[cfg(feature = "bank")]
 pub mod bank;
-#[cfg(feature = "modules")]
+#[cfg(feature = "reputation")]
 pub mod reputation;
-#[cfg(feature = "modules")]
+#[cfg(feature = "validation")]
 pub mod validation;
-#[cfg(feature = "modules")]
+#[cfg(feature = "memory")]
 pub mod memory;
-#[cfg(feature = "modules")]
+#[cfg(feature = "vc")]
 pub mod vc;
-#[cfg(feature = "modules")]
+#[cfg(feature = "intent")]
 pub mod intent;
-#[cfg(feature = "modules")]
+#[cfg(feature = "marketplace")]
 pub mod marketplace;
-#[cfg(feature = "modules")]
+#[cfg(feature = "job")]
 pub mod job;
-#[cfg(feature = "modules")]
+#[cfg(feature = "inference_registry")]
 pub mod inference_registry;
-#[cfg(feature = "modules")]
+#[cfg(feature = "agent_registry")]
 pub mod agent_registry;
-#[cfg(feature = "modules")]
+#[cfg(feature = "directory")]
 pub mod directory;
-#[cfg(feature = "modules")]
+#[cfg(feature = "interop")]
 pub mod interop;
-#[cfg(feature = "modules")]
+#[cfg(feature = "x402")]
 pub mod x402;
 
 /// On-chain transaction commands across all Morpheum modules.
 ///
-/// Each variant maps 1:1 to a Mormcore module. Gated behind the `modules`
-/// feature until the SDK crates expose the required message types.
+/// Each variant maps 1:1 to a Mormcore module, individually gated behind
+/// its own feature flag until the corresponding SDK crate is ready.
 #[derive(Subcommand)]
 pub enum TxCommands {
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "identity")]
     #[command(subcommand)]
     Identity(identity::IdentityCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "bank")]
     #[command(subcommand)]
     Bank(bank::BankCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "reputation")]
     #[command(subcommand)]
     Reputation(reputation::ReputationCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "validation")]
     #[command(subcommand)]
     Validation(validation::ValidationCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "memory")]
     #[command(subcommand)]
     Memory(memory::MemoryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "vc")]
     #[command(subcommand)]
     Vc(vc::VcCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "intent")]
     #[command(subcommand)]
     Intent(intent::IntentCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "marketplace")]
     #[command(subcommand)]
     Marketplace(marketplace::MarketplaceCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "job")]
     #[command(subcommand)]
     Job(job::JobCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "inference_registry")]
     #[command(subcommand)]
     InferenceRegistry(inference_registry::InferenceRegistryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "agent_registry")]
     #[command(subcommand)]
     AgentRegistry(agent_registry::AgentRegistryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "directory")]
     #[command(subcommand)]
     Directory(directory::DirectoryCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "interop")]
     #[command(subcommand)]
     Interop(interop::InteropCommands),
 
-    #[cfg(feature = "modules")]
+    #[cfg(feature = "x402")]
     #[command(subcommand)]
     X402(x402::X402Commands),
 }
 
 #[allow(clippy::unused_async)]
-pub async fn execute(cmd: TxCommands, _dispatcher: Dispatcher) -> Result<(), CliError> {
+pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "identity")]
         TxCommands::Identity(sub) => identity::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "bank")]
         TxCommands::Bank(sub) => bank::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "reputation")]
         TxCommands::Reputation(sub) => reputation::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "validation")]
         TxCommands::Validation(sub) => validation::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "memory")]
         TxCommands::Memory(sub) => memory::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "vc")]
         TxCommands::Vc(sub) => vc::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "intent")]
         TxCommands::Intent(sub) => intent::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "marketplace")]
         TxCommands::Marketplace(sub) => marketplace::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "job")]
         TxCommands::Job(sub) => job::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "inference_registry")]
         TxCommands::InferenceRegistry(sub) => inference_registry::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "agent_registry")]
         TxCommands::AgentRegistry(sub) => agent_registry::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "directory")]
         TxCommands::Directory(sub) => directory::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "interop")]
         TxCommands::Interop(sub) => interop::execute(sub, dispatcher).await,
-        #[cfg(feature = "modules")]
+        #[cfg(feature = "x402")]
         TxCommands::X402(sub) => x402::execute(sub, dispatcher).await,
     }
 }
