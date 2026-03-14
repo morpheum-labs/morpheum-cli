@@ -1,0 +1,45 @@
+[package]
+name = "morpheum-cli"
+version = "0.1.0"
+edition = "2021"
+description = "Human-friendly CLI for interacting with the Morpheum platform: issue VCs, manage agents, trade markets, identity, staking, DAO, etc."
+license = "MIT"
+repository = "https://github.com/morpheum-labs/morpheum-cli"
+homepage = "https://morpheum.xyz"
+authors = ["Morpheum Labs <contact@morpheum.xyz>"]
+keywords = ["morpheum", "blockchain", "cli", "agent", "verifiable-credentials", "crypto"]
+categories = ["command-line-utilities", "cryptography"]
+
+[lib]
+name = "morpheum_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "morpheum"
+path = "src/main.rs"
+
+[dependencies]
+# Path for local dev (SDK requires sibling morpheum-proto + morpheum-signing).
+# For standalone: git = "https://github.com/morpheum-labs/morpheum-sdk", branch = "main"
+# (requires SDK to publish deps to crates.io or use git submodules)
+morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = ["full"] }
+
+clap = { version = "4.5", features = ["derive", "env", "wrap_help"] }
+tokio = { version = "1.40", features = ["full"] }
+anyhow = "1.0.86"
+thiserror = "1.0"
+colored = "2.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+dirs = "5.0"
+toml = "0.8"
+rpassword = "7.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+shellexpand = "3.1"
+comfy-table = "7.1"
+hex = "0.4"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
