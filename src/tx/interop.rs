@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::interop::{
     BridgeRequestBuilder, ExportIntentBuilder, ExportProofBuilder,
-    CrossChainProofPacket,
+    CrossChainProofPacket, IntentExportPacket,
 };
 
 use crate::dispatcher::Dispatcher;
@@ -15,7 +15,7 @@ use crate::error::CliError;
 /// the connectivity layer described in Pillar 4.
 #[derive(Subcommand)]
 pub enum InteropCommands {
-    /// Submit a cross-chain bridge request
+    /// Submit a cross-chain bridge request (proof or intent payload)
     Bridge(BridgeArgs),
 
     /// Export an intent to a target chain
@@ -35,9 +35,25 @@ pub struct BridgeArgs {
     #[arg(long)]
     pub target_chain: String,
 
-    /// Intent ID to bridge (bridges the intent payload)
+    /// Agent hash for proof payload (mutually exclusive with --intent-id)
+    #[arg(long)]
+    pub agent_hash: Option<String>,
+
+    /// Merkle proof string (used with --agent-hash)
+    #[arg(long, default_value = "")]
+    pub merkle_proof: String,
+
+    /// Intent ID for intent payload (mutually exclusive with --agent-hash)
     #[arg(long)]
     pub intent_id: Option<String>,
+
+    /// Source agent hash for intent payload (used with --intent-id)
+    #[arg(long)]
+    pub source_agent_hash: Option<String>,
+
+    /// Intent data as hex-encoded bytes (used with --intent-id)
+    #[arg(long)]
+    pub intent_data: Option<String>,
 
     /// Key name to sign with
     #[arg(long, default_value = "default")]
@@ -114,11 +130,54 @@ async fn bridge(args: BridgeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let signer_bytes = signer.public_key().to_proto_bytes();
 
-    let request = BridgeRequestBuilder::new()
+    let mut builder = BridgeRequestBuilder::new()
         .source_chain(&args.source_chain)
         .target_chain(&args.target_chain)
-        .signer(signer_bytes)
-        .build().map_err(CliError::Sdk)?;
+        .signer(signer_bytes);
+
+    match (&args.agent_hash, &args.intent_id) {
+        (Some(agent_hash), None) => {
+            let proof_packet = CrossChainProofPacket {
+                source_chain: args.source_chain.clone(),
+                target_chain: args.target_chain.clone(),
+                agent_hash: agent_hash.clone(),
+                proof: None,
+                exported_at: 0,
+                merkle_proof: args.merkle_proof.clone(),
+            };
+            builder = builder.proof_payload(proof_packet);
+        }
+        (None, Some(intent_id)) => {
+            let source_agent = args.source_agent_hash.clone().unwrap_or_default();
+            let intent_data = match args.intent_data {
+                Some(ref hex_str) => hex::decode(hex_str).map_err(|e| {
+                    CliError::invalid_input(format!("invalid hex for intent_data: {e}"))
+                })?,
+                None => Vec::new(),
+            };
+            let intent_packet = IntentExportPacket {
+                intent_id: intent_id.clone(),
+                source_agent_hash: source_agent,
+                target_chain: args.target_chain.clone(),
+                intent_data,
+                signature: Vec::new(),
+                exported_at: 0,
+            };
+            builder = builder.intent_payload(intent_packet);
+        }
+        (Some(_), Some(_)) => {
+            return Err(CliError::invalid_input(
+                "--agent-hash and --intent-id are mutually exclusive",
+            ));
+        }
+        (None, None) => {
+            return Err(CliError::invalid_input(
+                "either --agent-hash (for proof) or --intent-id (for intent) is required",
+            ));
+        }
+    }
+
+    let request = builder.build().map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
         signer, dispatcher, request.to_any(), args.memo,
