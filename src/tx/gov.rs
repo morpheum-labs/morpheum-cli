@@ -57,6 +57,13 @@ pub struct SubmitProposalArgs {
     #[arg(long, default_value = "")]
     pub metadata: String,
 
+    /// Execution messages as JSON: `[{"type_url":"/mod.v1.Msg","value":"<hex>"}]`
+    ///
+    /// Each element's `value` is the hex-encoded protobuf-serialized message body.
+    /// These messages are executed atomically when the proposal passes.
+    #[arg(long, default_value = "")]
+    pub messages: String,
+
     /// Key name to sign with
     #[arg(long, default_value = "default")]
     pub from: String,
@@ -182,6 +189,11 @@ async fn submit_proposal(
         builder = builder.metadata(&args.metadata);
     }
 
+    if !args.messages.is_empty() {
+        let msgs = parse_execution_messages(&args.messages)?;
+        builder = builder.messages(msgs);
+    }
+
     let request = builder.build().map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
@@ -195,6 +207,33 @@ async fn submit_proposal(
     ));
 
     Ok(())
+}
+
+/// Parses a JSON array of execution messages into `Vec<ProtoAny>`.
+///
+/// Expected format: `[{"type_url":"/mod.v1.Msg","value":"<hex>"}]`
+fn parse_execution_messages(json_str: &str) -> Result<Vec<morpheum_proto::google::protobuf::Any>, CliError> {
+    #[derive(serde::Deserialize)]
+    struct RawMessage {
+        type_url: String,
+        value: String,
+    }
+
+    let raw: Vec<RawMessage> = serde_json::from_str(json_str)
+        .map_err(|e| CliError::InvalidInput { reason: format!("invalid --messages JSON: {e}") })?;
+
+    raw.into_iter()
+        .map(|m| {
+            let bytes = hex::decode(&m.value)
+                .map_err(|e| CliError::InvalidInput {
+                    reason: format!("invalid hex in message value for '{}': {e}", m.type_url),
+                })?;
+            Ok(morpheum_proto::google::protobuf::Any {
+                type_url: m.type_url,
+                value: bytes,
+            })
+        })
+        .collect()
 }
 
 async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
