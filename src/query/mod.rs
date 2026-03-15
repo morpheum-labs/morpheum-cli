@@ -31,6 +31,8 @@ pub mod directory;
 pub mod interop;
 #[cfg(feature = "x402")]
 pub mod x402;
+#[cfg(feature = "gov")]
+pub mod gov;
 
 /// On-chain query commands across all Morpheum modules.
 ///
@@ -92,6 +94,10 @@ pub enum QueryCommands {
     #[cfg(feature = "x402")]
     #[command(subcommand)]
     X402(x402::X402QueryCommands),
+
+    #[cfg(feature = "gov")]
+    #[command(subcommand)]
+    Gov(gov::GovQueryCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -125,5 +131,7 @@ pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), C
         QueryCommands::Interop(sub) => interop::execute(sub, dispatcher).await,
         #[cfg(feature = "x402")]
         QueryCommands::X402(sub) => x402::execute(sub, dispatcher).await,
+        #[cfg(feature = "gov")]
+        QueryCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
     }
 }

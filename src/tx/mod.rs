@@ -31,6 +31,8 @@ pub mod directory;
 pub mod interop;
 #[cfg(feature = "x402")]
 pub mod x402;
+#[cfg(feature = "gov")]
+pub mod gov;
 
 /// On-chain transaction commands across all Morpheum modules.
 ///
@@ -93,6 +95,10 @@ pub enum TxCommands {
     #[cfg(feature = "x402")]
     #[command(subcommand)]
     X402(x402::X402Commands),
+
+    #[cfg(feature = "gov")]
+    #[command(subcommand)]
+    Gov(gov::GovCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -126,5 +132,7 @@ pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliE
         TxCommands::Interop(sub) => interop::execute(sub, dispatcher).await,
         #[cfg(feature = "x402")]
         TxCommands::X402(sub) => x402::execute(sub, dispatcher).await,
+        #[cfg(feature = "gov")]
+        TxCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
     }
 }
