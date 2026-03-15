@@ -26,10 +26,16 @@ mod broadcast {
 
         let last_monotonic = resp.state.as_ref().map_or(0, |s| s.last_monotonic);
 
+        // Subtract a 2-second safety margin so the server always sees this
+        // timestamp as "in the past". The chain validates
+        // `now_truncated.wrapping_sub(ts_ms) <= window_ms` using u32
+        // arithmetic — even 1ms of clock skew in the wrong direction causes
+        // wrapping_sub to overflow to near u32::MAX, triggering rejection.
+        // 2s is negligible against the 500s window but prevents all edge cases.
         #[allow(clippy::cast_possible_truncation)]
         let ts_ms = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_millis() as u32)
+            .map(|d| (d.as_millis() as u32).wrapping_sub(2000))
             .unwrap_or(0);
 
         Ok(morpheum_proto::tx::v1::Nonce {
