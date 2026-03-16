@@ -2,7 +2,7 @@ use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::x402::{
     RegisterPolicyBuilder, UpdatePolicyBuilder, RotateAddressBuilder,
-    ApproveOutboundBuilder, Policy, Scheme,
+    ApproveOutboundBuilder, SettleBridgePaymentBuilder, Policy, Scheme,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -27,6 +27,9 @@ pub enum X402Commands {
 
     /// Approve an outbound x402 payment
     ApproveOutbound(ApproveOutboundArgs),
+
+    /// Settle a cross-chain bridge payment (relay/operator)
+    SettleBridgePayment(SettleBridgePaymentArgs),
 }
 
 #[derive(Args)]
@@ -149,12 +152,56 @@ pub struct ApproveOutboundArgs {
     pub memo: Option<String>,
 }
 
+#[derive(Args)]
+pub struct SettleBridgePaymentArgs {
+    /// Payment ID from the source chain escrow
+    #[arg(long)]
+    pub payment_id: String,
+
+    /// Source chain in CAIP-2 format (e.g. "eip155:8453" for Base)
+    #[arg(long)]
+    pub source_chain: String,
+
+    /// Target agent ID on Morpheum
+    #[arg(long)]
+    pub target_agent_id: String,
+
+    /// Payment amount in micro-USD
+    #[arg(long)]
+    pub amount: u64,
+
+    /// Asset identifier (e.g. "USDC")
+    #[arg(long)]
+    pub asset: String,
+
+    /// Hex-encoded EVM transaction signature payload
+    #[arg(long)]
+    pub signature_payload: String,
+
+    /// GMP reply channel ID
+    #[arg(long)]
+    pub reply_channel: String,
+
+    /// Optional payment memo
+    #[arg(long)]
+    pub payment_memo: Option<String>,
+
+    /// Key name to sign with (relayer identity)
+    #[arg(long, default_value = "default")]
+    pub from: String,
+
+    /// Optional transaction memo
+    #[arg(long)]
+    pub memo: Option<String>,
+}
+
 pub async fn execute(cmd: X402Commands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         X402Commands::RegisterPolicy(args) => register_policy(args, &dispatcher).await,
         X402Commands::UpdatePolicy(args) => update_policy(args, &dispatcher).await,
         X402Commands::RotateAddress(args) => rotate_address(args, &dispatcher).await,
         X402Commands::ApproveOutbound(args) => approve_outbound(args, &dispatcher).await,
+        X402Commands::SettleBridgePayment(args) => settle_bridge_payment(args, &dispatcher).await,
     }
 }
 
@@ -308,6 +355,53 @@ async fn approve_outbound(
     dispatcher.output.success(format!(
         "x402 outbound payment approved\nAgent: {}, Destination: {}\nAmount: {} {}\nTxHash: {}",
         args.agent_id, args.destination, args.amount, args.asset, txhash,
+    ));
+
+    Ok(())
+}
+
+async fn settle_bridge_payment(
+    args: SettleBridgePaymentArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
+
+    let sig_payload = hex::decode(&args.signature_payload).map_err(|e| {
+        CliError::invalid_input(format!("invalid hex signature_payload: {e}"))
+    })?;
+
+    let mut builder = SettleBridgePaymentBuilder::new()
+        .relayer_address(signer.account_id().to_string())
+        .payment_id(&args.payment_id)
+        .source_chain(&args.source_chain)
+        .target_agent_id(&args.target_agent_id)
+        .amount(args.amount)
+        .asset(&args.asset)
+        .signature_payload(sig_payload)
+        .reply_channel(&args.reply_channel);
+
+    if let Some(ref memo) = args.payment_memo {
+        builder = builder.memo(memo);
+    }
+
+    let request = builder.build().map_err(CliError::Sdk)?;
+
+    let txhash = crate::utils::sign_and_broadcast(
+        signer,
+        dispatcher,
+        request.to_any(),
+        args.memo,
+    )
+    .await?;
+
+    dispatcher.output.success(format!(
+        "x402 bridge settlement submitted\n\
+         Payment ID: {}\n\
+         Source: {} → Agent: {}\n\
+         Amount: {} {}\n\
+         TxHash: {}",
+        args.payment_id, args.source_chain, args.target_agent_id,
+        args.amount, args.asset, txhash,
     ));
 
     Ok(())
