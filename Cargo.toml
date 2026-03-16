@@ -32,6 +32,7 @@ morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
     "intent",
     "marketplace",
     "directory",
+    "x402",
 ] }
 morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std"], optional = true }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
