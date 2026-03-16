@@ -3,6 +3,7 @@ use clap::{Args, Subcommand};
 use morpheum_sdk_native::x402::{
     RegisterPolicyBuilder, UpdatePolicyBuilder, RotateAddressBuilder,
     ApproveOutboundBuilder, SettleBridgePaymentBuilder, Policy, Scheme,
+    resolve_chain_name,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -158,9 +159,16 @@ pub struct SettleBridgePaymentArgs {
     #[arg(long)]
     pub payment_id: String,
 
-    /// Source chain in CAIP-2 format (e.g. "eip155:8453" for Base)
+    /// Source chain in CAIP-2 format (e.g. "eip155:8453" for Base).
+    /// Either --source-chain or --chain must be provided.
     #[arg(long)]
-    pub source_chain: String,
+    pub source_chain: Option<String>,
+
+    /// Human-readable chain name (e.g. "base", "ethereum", "solana").
+    /// Resolved to a CAIP-2 identifier via the SDK chain registry.
+    /// Either --chain or --source-chain must be provided.
+    #[arg(long)]
+    pub chain: Option<String>,
 
     /// Target agent ID on Morpheum
     #[arg(long)]
@@ -174,7 +182,7 @@ pub struct SettleBridgePaymentArgs {
     #[arg(long)]
     pub asset: String,
 
-    /// Hex-encoded EVM transaction signature payload
+    /// Hex-encoded signature payload from the source chain transaction
     #[arg(long)]
     pub signature_payload: String,
 
@@ -364,6 +372,8 @@ async fn settle_bridge_payment(
     args: SettleBridgePaymentArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
+    let source_chain = resolve_source_chain(&args)?;
+
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
 
     let sig_payload = hex::decode(&args.signature_payload).map_err(|e| {
@@ -373,7 +383,7 @@ async fn settle_bridge_payment(
     let mut builder = SettleBridgePaymentBuilder::new()
         .relayer_address(hex::encode(signer.account_id().0))
         .payment_id(&args.payment_id)
-        .source_chain(&args.source_chain)
+        .source_chain(&source_chain)
         .target_agent_id(&args.target_agent_id)
         .amount(args.amount)
         .asset(&args.asset)
@@ -400,11 +410,29 @@ async fn settle_bridge_payment(
          Source: {} → Agent: {}\n\
          Amount: {} {}\n\
          TxHash: {}",
-        args.payment_id, args.source_chain, args.target_agent_id,
+        args.payment_id, source_chain, args.target_agent_id,
         args.amount, args.asset, txhash,
     ));
 
     Ok(())
+}
+
+/// Resolves `--chain` or `--source-chain` into a CAIP-2 source chain string.
+fn resolve_source_chain(args: &SettleBridgePaymentArgs) -> Result<String, CliError> {
+    match (&args.source_chain, &args.chain) {
+        (Some(sc), _) => Ok(sc.clone()),
+        (None, Some(name)) => {
+            let meta = resolve_chain_name(name).ok_or_else(|| {
+                CliError::invalid_input(format!(
+                    "unknown chain name '{name}'; use --source-chain with a CAIP-2 identifier instead"
+                ))
+            })?;
+            Ok(meta.caip2())
+        }
+        (None, None) => Err(CliError::invalid_input(
+            "either --source-chain (CAIP-2) or --chain (name) is required",
+        )),
+    }
 }
 
 fn parse_scheme(s: &str) -> Result<Scheme, String> {
