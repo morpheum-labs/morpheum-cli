@@ -133,5 +133,6 @@ fn build_filter(args: &ProfilesArgs) -> Option<DirectoryFilter> {
         semantic_query: String::new(),
         limit: 0,
         offset: 0,
+        x402_only: false,
     })
 }

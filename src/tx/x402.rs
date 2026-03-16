@@ -371,7 +371,7 @@ async fn settle_bridge_payment(
     })?;
 
     let mut builder = SettleBridgePaymentBuilder::new()
-        .relayer_address(signer.account_id().to_string())
+        .relayer_address(hex::encode(signer.account_id().0))
         .payment_id(&args.payment_id)
         .source_chain(&args.source_chain)
         .target_agent_id(&args.target_agent_id)
