@@ -194,6 +194,10 @@ pub struct SettleBridgePaymentArgs {
     #[arg(long)]
     pub payment_memo: Option<String>,
 
+    /// EVM address of the original payer on the source chain
+    #[arg(long, default_value = "")]
+    pub payer_address: String,
+
     /// Key name to sign with (relayer identity)
     #[arg(long, default_value = "default")]
     pub from: String,
@@ -388,7 +392,8 @@ async fn settle_bridge_payment(
         .amount(args.amount)
         .asset(&args.asset)
         .signature_payload(sig_payload)
-        .reply_channel(&args.reply_channel);
+        .reply_channel(&args.reply_channel)
+        .payer_address(&args.payer_address);
 
     if let Some(ref memo) = args.payment_memo {
         builder = builder.memo(memo);
