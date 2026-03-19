@@ -1747,6 +1747,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-gmp"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost 0.14.3",
+]
+
+[[package]]
 name = "morpheum-sdk-gov"
 version = "0.1.0"
 dependencies = [
@@ -1848,6 +1858,7 @@ dependencies = [
  "morpheum-sdk-bank",
  "morpheum-sdk-core",
  "morpheum-sdk-directory",
+ "morpheum-sdk-gmp",
  "morpheum-sdk-identity",
  "morpheum-sdk-inference-registry",
  "morpheum-sdk-intent",

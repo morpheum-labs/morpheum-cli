@@ -31,6 +31,8 @@ pub mod directory;
 pub mod interop;
 #[cfg(feature = "x402")]
 pub mod x402;
+#[cfg(all(feature = "gmp", feature = "interop"))]
+pub mod gmp;
 #[cfg(feature = "gov")]
 pub mod gov;
 
@@ -96,6 +98,10 @@ pub enum TxCommands {
     #[command(subcommand)]
     X402(x402::X402Commands),
 
+    #[cfg(all(feature = "gmp", feature = "interop"))]
+    #[command(subcommand)]
+    Gmp(gmp::GmpCommands),
+
     #[cfg(feature = "gov")]
     #[command(subcommand)]
     Gov(gov::GovCommands),
@@ -132,6 +138,8 @@ pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliE
         TxCommands::Interop(sub) => interop::execute(sub, dispatcher).await,
         #[cfg(feature = "x402")]
         TxCommands::X402(sub) => x402::execute(sub, dispatcher).await,
+        #[cfg(all(feature = "gmp", feature = "interop"))]
+        TxCommands::Gmp(sub) => gmp::execute(sub, dispatcher).await,
         #[cfg(feature = "gov")]
         TxCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
     }

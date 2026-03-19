@@ -31,6 +31,8 @@ pub mod directory;
 pub mod interop;
 #[cfg(feature = "x402")]
 pub mod x402;
+#[cfg(all(feature = "gmp", feature = "interop"))]
+pub mod gmp;
 #[cfg(feature = "gov")]
 pub mod gov;
 
@@ -95,6 +97,10 @@ pub enum QueryCommands {
     #[command(subcommand)]
     X402(x402::X402QueryCommands),
 
+    #[cfg(all(feature = "gmp", feature = "interop"))]
+    #[command(subcommand)]
+    Gmp(gmp::GmpQueryCommands),
+
     #[cfg(feature = "gov")]
     #[command(subcommand)]
     Gov(gov::GovQueryCommands),
@@ -131,6 +137,8 @@ pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), C
         QueryCommands::Interop(sub) => interop::execute(sub, dispatcher).await,
         #[cfg(feature = "x402")]
         QueryCommands::X402(sub) => x402::execute(sub, dispatcher).await,
+        #[cfg(all(feature = "gmp", feature = "interop"))]
+        QueryCommands::Gmp(sub) => gmp::execute(sub, dispatcher).await,
         #[cfg(feature = "gov")]
         QueryCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
     }
