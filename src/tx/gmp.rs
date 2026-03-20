@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
+use morpheum_primitives::address::GOVERNANCE_ADDRESS;
 
 use morpheum_sdk_native::gmp::{
     HyperlaneParamsBuilder, UpdateGmpParamsBuilder, WarpRouteConfigBuilder,
@@ -51,8 +52,8 @@ pub struct UpdateParamsArgs {
     #[arg(long)]
     pub params_file: PathBuf,
 
-    /// Governance authority address (defaults to "morm1governance")
-    #[arg(long, default_value = "morm1governance")]
+    /// Governance authority address (defaults to deterministic governance module address)
+    #[arg(long, default_value = GOVERNANCE_ADDRESS)]
     pub authority: String,
 
     /// Key name to sign with

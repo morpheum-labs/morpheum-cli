@@ -4227,6 +4227,7 @@ dependencies = [
  "http 1.4.0",
  "keyring",
  "miette",
+ "morpheum-primitives",
  "morpheum-proto",
  "morpheum-sdk-core",
  "morpheum-sdk-cosmwasm",
@@ -4256,6 +4257,7 @@ name = "morpheum-primitives"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "bech32",
  "bincode",
  "blake3",
  "bytemuck",
@@ -4370,6 +4372,7 @@ name = "morpheum-sdk-gmp"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "morpheum-primitives",
  "morpheum-proto",
  "morpheum-sdk-core",
  "prost 0.14.3",

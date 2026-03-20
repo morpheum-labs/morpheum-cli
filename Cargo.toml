@@ -45,6 +45,7 @@ morpheum-sdk-cosmwasm = { path = "../morpheum-sdk/crates/cosmwasm" }
 morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std"], optional = true }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
 morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
+morpheum-primitives = { path = "../morpheum-primitives" }
 
 # ── gRPC Transport ────────────────────────────────────────────────────────────
 tonic = { version = "0.14", features = ["transport"] }
