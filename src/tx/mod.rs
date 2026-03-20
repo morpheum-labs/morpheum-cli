@@ -35,6 +35,8 @@ pub mod x402;
 pub mod gmp;
 #[cfg(feature = "gov")]
 pub mod gov;
+#[cfg(feature = "cosmwasm")]
+pub mod cosmwasm;
 
 /// On-chain transaction commands across all Morpheum modules.
 ///
@@ -105,6 +107,11 @@ pub enum TxCommands {
     #[cfg(feature = "gov")]
     #[command(subcommand)]
     Gov(gov::GovCommands),
+
+    /// CosmWasm contract interaction (store-code, instantiate, execute)
+    #[cfg(feature = "cosmwasm")]
+    #[command(subcommand)]
+    Cosmwasm(cosmwasm::CosmwasmCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -142,5 +149,7 @@ pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliE
         TxCommands::Gmp(sub) => gmp::execute(sub, dispatcher).await,
         #[cfg(feature = "gov")]
         TxCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
+        #[cfg(feature = "cosmwasm")]
+        TxCommands::Cosmwasm(sub) => cosmwasm::execute(sub, dispatcher).await,
     }
 }

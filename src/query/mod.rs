@@ -35,6 +35,8 @@ pub mod x402;
 pub mod gmp;
 #[cfg(feature = "gov")]
 pub mod gov;
+#[cfg(feature = "cosmwasm")]
+pub mod cosmwasm;
 
 /// On-chain query commands across all Morpheum modules.
 ///
@@ -104,6 +106,11 @@ pub enum QueryCommands {
     #[cfg(feature = "gov")]
     #[command(subcommand)]
     Gov(gov::GovQueryCommands),
+
+    /// CosmWasm contract queries (smart, raw, contract-info)
+    #[cfg(feature = "cosmwasm")]
+    #[command(subcommand)]
+    Cosmwasm(cosmwasm::CosmwasmQueryCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -141,5 +148,7 @@ pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), C
         QueryCommands::Gmp(sub) => gmp::execute(sub, dispatcher).await,
         #[cfg(feature = "gov")]
         QueryCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
+        #[cfg(feature = "cosmwasm")]
+        QueryCommands::Cosmwasm(sub) => cosmwasm::execute(sub, dispatcher).await,
     }
 }

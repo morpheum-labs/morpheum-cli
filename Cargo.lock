@@ -4224,6 +4224,7 @@ dependencies = [
  "confy",
  "dirs",
  "hex",
+ "http 1.4.0",
  "keyring",
  "miette",
  "morpheum-proto",
@@ -4235,6 +4236,7 @@ dependencies = [
  "morpheum-sdk-svm",
  "morpheum-signing-native",
  "predicates",
+ "prost 0.14.3",
  "secrecy",
  "serde",
  "serde_json",
@@ -4244,6 +4246,7 @@ dependencies = [
  "tokio",
  "toml 0.8.23",
  "tonic 0.14.5",
+ "tonic-prost",
  "tracing",
  "tracing-subscriber",
 ]

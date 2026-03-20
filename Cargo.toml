@@ -77,6 +77,11 @@ tokio = { version = "1", features = ["full"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"] }
 
+# ── Protobuf / gRPC ───────────────────────────────────────────────────────────
+prost = "0.14"
+tonic-prost = "0.14"
+http = "1"
+
 # ── Utilities ──────────────────────────────────────────────────────────────────
 dirs = "5.0"
 hex = "0.4"
@@ -109,10 +114,11 @@ marketplace = ["_transport"]
 directory = ["_transport"]
 x402 = ["_transport"]
 gmp = ["_transport", "interop"]
+cosmwasm = ["_transport"]
 gov = ["_transport", "dep:morpheum-sdk-gov"]
 # Enable all modules at once.
 modules = ["identity", "bank", "agent_registry", "inference_registry", "interop", "job",
-    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "gov"]
+    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "gov"]
 
 [profile.release]
 opt-level = 3
