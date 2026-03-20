@@ -38,6 +38,7 @@ morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
     "svm",
     "cosmwasm",
 ] }
+morpheum-sdk-core = { path = "../morpheum-sdk/crates/core", features = ["chain-registry"] }
 morpheum-sdk-evm = { path = "../morpheum-sdk/crates/evm" }
 morpheum-sdk-svm = { path = "../morpheum-sdk/crates/svm" }
 morpheum-sdk-cosmwasm = { path = "../morpheum-sdk/crates/cosmwasm" }

@@ -1,11 +1,16 @@
 //! Bridge CLI command definitions and handlers.
 
 use clap::{Args, Subcommand, ValueEnum};
+use morpheum_sdk_evm::config::ChainRegistry;
+use morpheum_sdk_svm::config::SolanaChainRegistry;
 
 use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+
+// Bring trait methods (`from_file`, `load_with_defaults`) into scope.
+use morpheum_sdk_core::ChainRegistryOps as _;
 
 /// Supported external chain types for bridge operations.
 #[derive(Clone, Debug, ValueEnum)]
@@ -14,6 +19,15 @@ pub enum ChainType {
     Evm,
     /// Solana / SVM-compatible chain
     Svm,
+}
+
+impl ChainType {
+    pub fn label(&self) -> &'static str {
+        match self {
+            ChainType::Evm => "EVM",
+            ChainType::Svm => "SVM",
+        }
+    }
 }
 
 /// Bridge commands for cross-chain token transfers via Hyperlane Warp Routes.
@@ -110,6 +124,65 @@ pub async fn execute(cmd: BridgeCommands, dispatcher: Dispatcher) -> Result<(), 
     }
 }
 
+// ── Shared helpers ──────────────────────────────────────────────────
+
+fn resolve_recipient(
+    explicit: &Option<String>,
+    key_name: &str,
+    keyring: &crate::keyring::KeyringManager,
+    allow_20_byte: bool,
+) -> Result<[u8; 32], CliError> {
+    let raw = match explicit {
+        Some(hex_str) => {
+            let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+            hex::decode(s)
+                .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
+        }
+        None => {
+            let native = keyring.get_native_signer(key_name)?;
+            native.account_id().0.to_vec()
+        }
+    };
+
+    let mut fixed = [0u8; 32];
+    if raw.len() == 32 {
+        fixed.copy_from_slice(&raw);
+    } else if raw.len() == 20 && allow_20_byte {
+        fixed[12..].copy_from_slice(&raw);
+    } else if allow_20_byte {
+        return Err(CliError::invalid_input("recipient must be 20 or 32 bytes"));
+    } else {
+        return Err(CliError::invalid_input("recipient must be exactly 32 bytes"));
+    }
+    Ok(fixed)
+}
+
+fn print_deposit_summary(
+    output: &crate::output::Output,
+    vm_label: &str,
+    from_address: &str,
+    chain_name: &str,
+    rpc_url: &str,
+    destination_domain: u32,
+    recipient: &[u8; 32],
+    token: &str,
+    amount: &str,
+    action_hint: &str,
+) {
+    output.success(format!(
+        "{vm_label} bridge deposit prepared\n\
+         From: {from_address}\n\
+         Chain: {chain_name}\n\
+         RPC: {rpc_url}\n\
+         Destination domain: {destination_domain}\n\
+         Recipient: 0x{}\n\
+         Token: {token}\n\
+         Amount: {amount}\n\n\
+         To complete, {action_hint}.",
+        hex::encode(recipient),
+    ));
+}
+
 // ── Deposit (External -> Morpheum) ──────────────────────────────────
 
 async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
@@ -122,56 +195,29 @@ async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 async fn deposit_evm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let chain_name = args.chain_name.as_deref().unwrap_or("ethereum");
 
-    let registry =
-        morpheum_sdk_evm::config::ChainRegistry::load_with_defaults(
-            morpheum_sdk_evm::DEFAULT_CHAINS_TOML,
-        )
-        .map_err(|e| CliError::Evm(format!("chain registry: {e}")))?;
+    let registry = ChainRegistry::load_with_defaults(morpheum_sdk_evm::DEFAULT_CHAINS_TOML)
+        .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
 
     let (chain, _token) = registry
         .resolve(chain_name, &args.token)
-        .map_err(|e| CliError::Evm(format!("resolving chain '{chain_name}': {e}")))?;
+        .map_err(|e| CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}")))?;
 
     let alloy_signer = dispatcher.keyring.get_evm_signer(&args.from)?;
     let from_address = format!("{:#x}", morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer));
+    let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, true)?;
 
-    let recipient_bytes = match &args.recipient {
-        Some(hex_str) => {
-            let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-            hex::decode(s)
-                .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
-        }
-        None => {
-            let native = dispatcher.keyring.get_native_signer(&args.from)?;
-            native.account_id().0.to_vec()
-        }
-    };
-
-    let mut recipient_fixed = [0u8; 32];
-    if recipient_bytes.len() == 32 {
-        recipient_fixed.copy_from_slice(&recipient_bytes);
-    } else if recipient_bytes.len() == 20 {
-        recipient_fixed[12..].copy_from_slice(&recipient_bytes);
-    } else {
-        return Err(CliError::invalid_input("recipient must be 20 or 32 bytes"));
-    }
-
-    dispatcher.output.success(format!(
-        "EVM bridge deposit prepared\n\
-         From: {from_address}\n\
-         Chain: {chain_name}\n\
-         RPC: {}\n\
-         Destination domain: {}\n\
-         Recipient: 0x{}\n\
-         Token: {}\n\
-         Amount: {}\n\n\
-         To complete, call the Warp Route contract's transferRemote() with the above parameters.",
-        chain.rpc_url,
+    print_deposit_summary(
+        &dispatcher.output,
+        "EVM",
+        &from_address,
+        chain_name,
+        &chain.rpc_url,
         args.destination_domain,
-        hex::encode(recipient_fixed),
-        args.token,
-        args.amount,
-    ));
+        &recipient,
+        &args.token,
+        &args.amount,
+        "call the Warp Route contract's transferRemote() with the above parameters",
+    );
 
     Ok(())
 }
@@ -179,51 +225,29 @@ async fn deposit_evm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
 async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let chain_name = args.chain_name.as_deref().unwrap_or("solana");
 
-    let registry =
-        morpheum_sdk_svm::config::SolanaChainRegistry::load_with_defaults(
-            morpheum_sdk_svm::DEFAULT_CHAINS_TOML,
-        )
-        .map_err(|e| CliError::Svm(format!("chain registry: {e}")))?;
+    let registry = SolanaChainRegistry::load_with_defaults(morpheum_sdk_svm::DEFAULT_CHAINS_TOML)
+        .map_err(|e| CliError::chain("SVM", format!("chain registry: {e}")))?;
 
     let (chain, _token) = registry
         .resolve(chain_name, &args.token)
-        .map_err(|e| CliError::Svm(format!("resolving chain '{chain_name}': {e}")))?;
+        .map_err(|e| CliError::chain("SVM", format!("resolving chain '{chain_name}': {e}")))?;
 
     let solana_signer = dispatcher.keyring.get_solana_signer(&args.from)?;
     let from_address = bs58::encode(solana_signer.public_key_bytes()).into_string();
+    let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, false)?;
 
-    let recipient_bytes = match &args.recipient {
-        Some(hex_str) => {
-            let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-            hex::decode(s)
-                .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
-        }
-        None => {
-            let native = dispatcher.keyring.get_native_signer(&args.from)?;
-            native.account_id().0.to_vec()
-        }
-    };
-
-    if recipient_bytes.len() != 32 {
-        return Err(CliError::invalid_input("recipient must be exactly 32 bytes"));
-    }
-
-    dispatcher.output.success(format!(
-        "SVM bridge deposit prepared\n\
-         From: {from_address}\n\
-         Chain: {chain_name}\n\
-         RPC: {}\n\
-         Destination domain: {}\n\
-         Recipient: 0x{}\n\
-         Token: {}\n\
-         Amount: {}\n\n\
-         To complete, submit a Warp Route transfer_remote instruction to Solana.",
-        chain.rpc_url,
+    print_deposit_summary(
+        &dispatcher.output,
+        "SVM",
+        &from_address,
+        chain_name,
+        &chain.rpc_url,
         args.destination_domain,
-        hex::encode(&recipient_bytes),
-        args.token,
-        args.amount,
-    ));
+        &recipient,
+        &args.token,
+        &args.amount,
+        "submit a Warp Route transfer_remote instruction to Solana",
+    );
 
     Ok(())
 }
@@ -243,10 +267,7 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
             .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
     };
 
-    let chain_label = match args.chain {
-        ChainType::Evm => "EVM",
-        ChainType::Svm => "SVM",
-    };
+    let chain_label = args.chain.label();
 
     let request = WarpRouteTransferBuilder::new()
         .sender(from_address)
@@ -286,10 +307,7 @@ async fn withdraw(_args: WithdrawArgs, _dispatcher: &Dispatcher) -> Result<(), C
 // ── Status ──────────────────────────────────────────────────────────
 
 async fn status(args: StatusArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let chain_label = match args.chain {
-        ChainType::Evm => "EVM",
-        ChainType::Svm => "SVM",
-    };
+    let chain_label = args.chain.label();
 
     dispatcher.output.success(format!(
         "Bridge status lookup ({chain_label})\n\

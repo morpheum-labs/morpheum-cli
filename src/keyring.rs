@@ -67,7 +67,7 @@ impl KeyringManager {
 
         let key_bytes = evm.private_key_bytes();
         PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
-            .map_err(|e| CliError::Evm(format!("failed to create EVM signer: {e}")))
+            .map_err(|e| CliError::chain("EVM", format!("failed to create EVM signer: {e}")))
     }
 
     /// Returns the EVM (0x-prefixed) address for a stored key.

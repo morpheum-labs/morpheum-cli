@@ -4227,6 +4227,7 @@ dependencies = [
  "keyring",
  "miette",
  "morpheum-proto",
+ "morpheum-sdk-core",
  "morpheum-sdk-cosmwasm",
  "morpheum-sdk-evm",
  "morpheum-sdk-gov",
@@ -4319,6 +4320,7 @@ name = "morpheum-sdk-core"
 version = "0.1.0"
 dependencies = [
  "async-trait",
+ "dirs-next",
  "morpheum-proto",
  "morpheum-signing-core",
  "prost 0.14.3",
@@ -4353,6 +4355,7 @@ version = "0.1.0"
 dependencies = [
  "alloy",
  "dirs-next",
+ "morpheum-sdk-core",
  "serde",
  "serde_json",
  "thiserror 2.0.18",
@@ -4523,6 +4526,7 @@ dependencies = [
  "borsh 1.6.1",
  "bs58",
  "dirs-next",
+ "morpheum-sdk-core",
  "serde",
  "serde_json",
  "solana-client",

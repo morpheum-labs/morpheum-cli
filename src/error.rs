@@ -55,26 +55,15 @@ pub enum CliError {
     #[allow(dead_code)]
     Transport(String),
 
-    #[error("EVM operation failed: {0}")]
+    #[error("{vm} operation failed: {message}")]
     #[diagnostic(
-        code(morpheum::cli::evm),
-        help("Check RPC URL and contract addresses in your chain configuration")
+        code(morpheum::cli::chain),
+        help("Check RPC URL, contract/program addresses, and account balances")
     )]
-    Evm(String),
-
-    #[error("SVM (Solana) operation failed: {0}")]
-    #[diagnostic(
-        code(morpheum::cli::svm),
-        help("Check Solana RPC URL, program IDs, and account balances")
-    )]
-    Svm(String),
-
-    #[error("CosmWasm operation failed: {0}")]
-    #[diagnostic(
-        code(morpheum::cli::cosmwasm),
-        help("Check contract address, code ID, and message format")
-    )]
-    CosmWasm(String),
+    Chain {
+        vm: &'static str,
+        message: String,
+    },
 
     #[error("Internal error: {0}")]
     #[diagnostic(code(morpheum::cli::internal))]
@@ -92,6 +81,10 @@ impl CliError {
     #[allow(dead_code)]
     pub fn agent_not_found(id: impl Into<String>) -> Self {
         Self::AgentNotFound { id: id.into() }
+    }
+
+    pub fn chain(vm: &'static str, message: impl Into<String>) -> Self {
+        Self::Chain { vm, message: message.into() }
     }
 
     #[allow(dead_code)]
