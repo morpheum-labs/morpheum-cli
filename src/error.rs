@@ -55,6 +55,27 @@ pub enum CliError {
     #[allow(dead_code)]
     Transport(String),
 
+    #[error("EVM operation failed: {0}")]
+    #[diagnostic(
+        code(morpheum::cli::evm),
+        help("Check RPC URL and contract addresses in your chain configuration")
+    )]
+    Evm(String),
+
+    #[error("SVM (Solana) operation failed: {0}")]
+    #[diagnostic(
+        code(morpheum::cli::svm),
+        help("Check Solana RPC URL, program IDs, and account balances")
+    )]
+    Svm(String),
+
+    #[error("CosmWasm operation failed: {0}")]
+    #[diagnostic(
+        code(morpheum::cli::cosmwasm),
+        help("Check contract address, code ID, and message format")
+    )]
+    CosmWasm(String),
+
     #[error("Internal error: {0}")]
     #[diagnostic(code(morpheum::cli::internal))]
     #[allow(dead_code)]

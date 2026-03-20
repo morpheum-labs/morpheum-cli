@@ -34,7 +34,13 @@ morpheum-sdk-native = { path = "../morpheum-sdk/crates/native", features = [
     "directory",
     "x402",
     "gmp",
+    "evm",
+    "svm",
+    "cosmwasm",
 ] }
+morpheum-sdk-evm = { path = "../morpheum-sdk/crates/evm" }
+morpheum-sdk-svm = { path = "../morpheum-sdk/crates/svm" }
+morpheum-sdk-cosmwasm = { path = "../morpheum-sdk/crates/cosmwasm" }
 morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std"], optional = true }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
 morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
@@ -73,6 +79,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "ansi"]
 # ── Utilities ──────────────────────────────────────────────────────────────────
 dirs = "5.0"
 hex = "0.4"
+bs58 = "0.5"
 
 [dev-dependencies]
 tempfile = "3"

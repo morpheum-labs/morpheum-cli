@@ -1,6 +1,6 @@
 use crate::config::MorpheumConfig;
 use crate::error::CliError;
-use morpheum_signing_native::NativeSigner;
+use morpheum_signing_native::{EvmSigner, NativeSigner, SolanaSigner};
 use secrecy::{ExposeSecret, SecretString};
 use std::fs;
 use std::path::PathBuf;
@@ -47,6 +47,52 @@ impl KeyringManager {
         let mnemonic = self.load_secret(name)?;
         NativeSigner::from_mnemonic(mnemonic.expose_secret(), "")
             .map_err(CliError::Signing)
+    }
+
+    /// Derives an alloy `PrivateKeySigner` from the stored BIP-39 mnemonic.
+    ///
+    /// Derivation path: `m/44'/60'/0'/0/0` (standard Ethereum). The same mnemonic
+    /// that produces the Morpheum native key also produces a deterministic EVM key,
+    /// so the user never manages two separate secrets.
+    pub fn get_evm_signer(
+        &self,
+        name: &str,
+    ) -> Result<morpheum_sdk_evm::alloy::signers::local::PrivateKeySigner, CliError> {
+        use morpheum_sdk_evm::alloy::primitives::FixedBytes;
+        use morpheum_sdk_evm::alloy::signers::local::PrivateKeySigner;
+
+        let mnemonic = self.load_secret(name)?;
+        let evm = EvmSigner::from_mnemonic(mnemonic.expose_secret(), "")
+            .map_err(CliError::Signing)?;
+
+        let key_bytes = evm.private_key_bytes();
+        PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
+            .map_err(|e| CliError::Evm(format!("failed to create EVM signer: {e}")))
+    }
+
+    /// Returns the EVM (0x-prefixed) address for a stored key.
+    pub fn evm_address(&self, name: &str) -> Result<String, CliError> {
+        use morpheum_sdk_evm::alloy::signers::Signer;
+
+        let signer = self.get_evm_signer(name)?;
+        Ok(format!("{:#x}", signer.address()))
+    }
+
+    /// Derives a `SolanaSigner` from the stored BIP-39 mnemonic.
+    ///
+    /// Derivation path: `m/44'/501'/0'/0'` (standard Solana, SLIP-0010 Ed25519).
+    /// The same mnemonic produces deterministic keys for Morpheum native, EVM,
+    /// and Solana.
+    pub fn get_solana_signer(&self, name: &str) -> Result<SolanaSigner, CliError> {
+        let mnemonic = self.load_secret(name)?;
+        SolanaSigner::from_mnemonic(mnemonic.expose_secret(), "")
+            .map_err(CliError::Signing)
+    }
+
+    /// Returns the Base58-encoded Solana address for a stored key.
+    pub fn solana_address(&self, name: &str) -> Result<String, CliError> {
+        let signer = self.get_solana_signer(name)?;
+        Ok(bs58::encode(signer.public_key_bytes()).into_string())
     }
 
     /// Lists all stored key names.

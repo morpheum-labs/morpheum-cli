@@ -56,6 +56,10 @@ pub enum Commands {
     #[command(subcommand)]
     Query(crate::query::QueryCommands),
 
+    /// Cross-chain bridge (deposit, withdraw, status) via Hyperlane Warp Routes
+    #[command(subcommand)]
+    Bridge(crate::bridge::BridgeCommands),
+
     /// mwvm — Local simulation, debugging, orchestration and developer runtime (Pillar 1)
     #[command(subcommand)]
     Mwvm(crate::mwvm::MwvmCommands),

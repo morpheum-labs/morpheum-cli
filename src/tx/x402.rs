@@ -140,6 +140,11 @@ pub struct ApproveOutboundArgs {
     #[arg(long)]
     pub idempotency_key: String,
 
+    /// Target chain for payment routing (e.g. "ethereum", "solana", "base").
+    /// When set, the scheme is auto-selected (exact-evm for EVM chains, exact-svm for SVM).
+    #[arg(long)]
+    pub chain: Option<String>,
+
     /// Optional payment memo
     #[arg(long)]
     pub payment_memo: Option<String>,
@@ -342,12 +347,14 @@ async fn approve_outbound(
         CliError::invalid_input(format!("invalid hex idempotency key: {e}"))
     })?;
 
+    let scheme = resolve_payment_scheme(&args)?;
+
     let mut builder = ApproveOutboundBuilder::new()
         .agent_id(&args.agent_id)
         .destination(&args.destination)
         .amount(args.amount)
         .asset(&args.asset)
-        .scheme(args.scheme)
+        .scheme(scheme)
         .idempotency_key(idem_key);
 
     if let Some(ref memo) = args.payment_memo {
@@ -364,12 +371,34 @@ async fn approve_outbound(
     )
     .await?;
 
+    let chain_label = args.chain.as_deref().unwrap_or("native");
     dispatcher.output.success(format!(
-        "x402 outbound payment approved\nAgent: {}, Destination: {}\nAmount: {} {}\nTxHash: {}",
+        "x402 outbound payment approved ({chain_label})\nAgent: {}, Destination: {}\nAmount: {} {}\nTxHash: {}",
         args.agent_id, args.destination, args.amount, args.asset, txhash,
     ));
 
     Ok(())
+}
+
+/// Resolves the payment scheme from `--chain` (if given) or falls back to `--scheme`.
+fn resolve_payment_scheme(args: &ApproveOutboundArgs) -> Result<Scheme, CliError> {
+    if let Some(ref chain_name) = args.chain {
+        let meta = resolve_chain_name(chain_name).ok_or_else(|| {
+            CliError::invalid_input(format!(
+                "unknown chain '{chain_name}'; use --scheme explicitly or provide a known chain name"
+            ))
+        })?;
+        let caip2 = meta.caip2();
+        if caip2.starts_with("eip155:") {
+            Ok(Scheme::ExactEvm)
+        } else if caip2.starts_with("solana:") {
+            Ok(Scheme::ExactSvm)
+        } else {
+            Ok(Scheme::Exact)
+        }
+    } else {
+        Ok(args.scheme.clone())
+    }
 }
 
 async fn settle_bridge_payment(
@@ -444,8 +473,9 @@ fn parse_scheme(s: &str) -> Result<Scheme, String> {
     match s.to_lowercase().as_str() {
         "exact" => Ok(Scheme::Exact),
         "exact-evm" | "evm" => Ok(Scheme::ExactEvm),
+        "exact-svm" | "svm" => Ok(Scheme::ExactSvm),
         other => Err(format!(
-            "unknown scheme '{other}'; expected: exact, exact-evm"
+            "unknown scheme '{other}'; expected: exact, exact-evm, exact-svm"
         )),
     }
 }
