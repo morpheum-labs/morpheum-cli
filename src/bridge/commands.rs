@@ -2,6 +2,7 @@
 
 use clap::{Args, Subcommand, ValueEnum};
 use morpheum_sdk_evm::config::ChainRegistry;
+use morpheum_sdk_evm::alloy::primitives::{FixedBytes, U256};
 use morpheum_sdk_svm::config::SolanaChainRegistry;
 
 use morpheum_signing_native::signer::Signer;
@@ -9,7 +10,6 @@ use morpheum_signing_native::signer::Signer;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-// Bring trait methods (`from_file`, `load_with_defaults`) into scope.
 use morpheum_sdk_core::ChainRegistryOps as _;
 
 /// Supported external chain types for bridge operations.
@@ -88,11 +88,11 @@ pub struct WithdrawArgs {
     #[arg(long)]
     pub recipient: String,
 
-    /// Bank asset index of the token to transfer
+    /// CosmWasm Warp Route contract address on Morpheum
     #[arg(long)]
-    pub asset_index: u64,
+    pub warp_route_contract: String,
 
-    /// Amount to withdraw
+    /// Amount to withdraw (in raw token units)
     #[arg(long)]
     pub amount: String,
 
@@ -107,13 +107,9 @@ pub struct StatusArgs {
     #[arg(long, value_enum)]
     pub chain: ChainType,
 
-    /// Transaction hash to look up
+    /// Hyperlane message ID (hex) to check delivery status
     #[arg(long)]
-    pub tx_hash: String,
-
-    /// Chain name or RPC URL (for external chain queries)
-    #[arg(long)]
-    pub chain_name: Option<String>,
+    pub message_id: String,
 }
 
 pub async fn execute(cmd: BridgeCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
@@ -157,30 +153,37 @@ fn resolve_recipient(
     Ok(fixed)
 }
 
-fn print_deposit_summary(
-    output: &crate::output::Output,
-    vm_label: &str,
-    from_address: &str,
-    chain_name: &str,
-    rpc_url: &str,
-    destination_domain: u32,
-    recipient: &[u8; 32],
-    token: &str,
-    amount: &str,
-    action_hint: &str,
-) {
-    output.success(format!(
-        "{vm_label} bridge deposit prepared\n\
-         From: {from_address}\n\
-         Chain: {chain_name}\n\
-         RPC: {rpc_url}\n\
-         Destination domain: {destination_domain}\n\
-         Recipient: 0x{}\n\
-         Token: {token}\n\
-         Amount: {amount}\n\n\
-         To complete, {action_hint}.",
-        hex::encode(recipient),
-    ));
+/// Parses a human-readable amount (e.g. "100") into an on-chain integer
+/// using the token's decimal precision (e.g. 6 decimals -> 100_000_000).
+fn parse_token_amount(amount_str: &str, decimals: u8) -> Result<U256, CliError> {
+    let parts: Vec<&str> = amount_str.split('.').collect();
+    let (whole, frac) = match parts.len() {
+        1 => (parts[0], ""),
+        2 => (parts[0], parts[1]),
+        _ => return Err(CliError::invalid_input("invalid amount format")),
+    };
+
+    let whole_val: u128 = whole.parse()
+        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+
+    let frac_len = frac.len();
+    if frac_len > decimals as usize {
+        return Err(CliError::invalid_input(format!(
+            "amount has {frac_len} fractional digits but token only supports {decimals}"
+        )));
+    }
+
+    let frac_val: u128 = if frac.is_empty() {
+        0
+    } else {
+        frac.parse().map_err(|e| CliError::invalid_input(format!("invalid fractional part: {e}")))?
+    };
+
+    let scale = 10u128.pow(decimals as u32);
+    let frac_scale = 10u128.pow((decimals as u32) - (frac_len as u32));
+    let raw = whole_val * scale + frac_val * frac_scale;
+
+    Ok(U256::from(raw))
 }
 
 // ── Deposit (External -> Morpheum) ──────────────────────────────────
@@ -198,56 +201,130 @@ async fn deposit_evm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
     let registry = ChainRegistry::load_with_defaults(morpheum_sdk_evm::DEFAULT_CHAINS_TOML)
         .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
 
-    let (chain, _token) = registry
+    let (chain, token) = registry
         .resolve(chain_name, &args.token)
         .map_err(|e| CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}")))?;
+
+    let collateral = token.collateral_contract.ok_or_else(|| {
+        CliError::chain("EVM", format!("no collateral contract configured for {} on {chain_name}", args.token))
+    })?;
 
     let alloy_signer = dispatcher.keyring.get_evm_signer(&args.from)?;
     let from_address = format!("{:#x}", morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer));
     let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, true)?;
 
-    print_deposit_summary(
-        &dispatcher.output,
-        "EVM",
-        &from_address,
-        chain_name,
-        &chain.rpc_url,
+    let amount = parse_token_amount(&args.amount, token.decimals)?;
+
+    dispatcher.output.info(format!(
+        "EVM bridge deposit\n\
+         From: {from_address}\n\
+         Chain: {chain_name} (RPC: {})\n\
+         Token: {} ({:#x})\n\
+         Collateral: {:#x}\n\
+         Amount: {} ({} raw)\n\
+         Destination domain: {}\n\
+         Recipient: 0x{}",
+        chain.rpc_url, args.token, token.address, collateral,
+        args.amount, amount, args.destination_domain, hex::encode(recipient),
+    ));
+
+    let provider = morpheum_sdk_evm::build_provider(&chain.rpc_url, alloy_signer)
+        .map_err(|e| CliError::chain("EVM", format!("provider: {e}")))?;
+
+    dispatcher.output.info("Approving ERC-20 spend...");
+    let approve_hash = morpheum_sdk_evm::approve_erc20(&provider, token.address, collateral, amount)
+        .await
+        .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
+    dispatcher.output.info(format!("Approval confirmed: {approve_hash:#x}"));
+
+    dispatcher.output.info("Calling transferRemote...");
+    let result = morpheum_sdk_evm::transfer_remote(
+        &provider,
+        collateral,
         args.destination_domain,
-        &recipient,
-        &args.token,
-        &args.amount,
-        "call the Warp Route contract's transferRemote() with the above parameters",
-    );
+        FixedBytes(recipient),
+        amount,
+        U256::ZERO,
+    )
+    .await
+    .map_err(|e| CliError::chain("EVM", format!("transferRemote: {e}")))?;
+
+    dispatcher.output.success(format!(
+        "Bridge deposit submitted (EVM)\n\
+         TxHash: {:#x}\n\
+         MessageID: {:#x}\n\
+         Amount: {} {} -> Morpheum domain {}",
+        result.tx_hash, result.message_id,
+        args.amount, args.token, args.destination_domain,
+    ));
 
     Ok(())
 }
 
 async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    use morpheum_sdk_svm::solana_sdk::signer::keypair::Keypair;
+
     let chain_name = args.chain_name.as_deref().unwrap_or("solana");
 
     let registry = SolanaChainRegistry::load_with_defaults(morpheum_sdk_svm::DEFAULT_CHAINS_TOML)
         .map_err(|e| CliError::chain("SVM", format!("chain registry: {e}")))?;
 
-    let (chain, _token) = registry
+    let (chain, token) = registry
         .resolve(chain_name, &args.token)
         .map_err(|e| CliError::chain("SVM", format!("resolving chain '{chain_name}': {e}")))?;
+
+    let warp_route = chain.warp_route_program.ok_or_else(|| {
+        CliError::chain("SVM", format!("no warp_route_program configured for {chain_name}"))
+    })?;
 
     let solana_signer = dispatcher.keyring.get_solana_signer(&args.from)?;
     let from_address = bs58::encode(solana_signer.public_key_bytes()).into_string();
     let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, false)?;
 
-    print_deposit_summary(
-        &dispatcher.output,
-        "SVM",
-        &from_address,
-        chain_name,
-        &chain.rpc_url,
+    let amount: u64 = args.amount.parse()
+        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+
+    dispatcher.output.info(format!(
+        "SVM bridge deposit\n\
+         From: {from_address}\n\
+         Chain: {chain_name} (RPC: {})\n\
+         Token: {} (mint: {})\n\
+         Warp Route: {warp_route}\n\
+         Amount: {amount}\n\
+         Destination domain: {}\n\
+         Recipient: 0x{}",
+        chain.rpc_url, args.token, token.mint,
+        args.destination_domain, hex::encode(recipient),
+    ));
+
+    let mut keypair_bytes = [0u8; 64];
+    keypair_bytes[..32].copy_from_slice(&solana_signer.private_key_bytes());
+    keypair_bytes[32..].copy_from_slice(&solana_signer.public_key_bytes());
+    let keypair = Keypair::from_bytes(&keypair_bytes)
+        .map_err(|e| CliError::chain("SVM", format!("keypair: {e}")))?;
+
+    let provider = morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)
+        .map_err(|e| CliError::chain("SVM", format!("provider: {e}")))?;
+
+    dispatcher.output.info("Calling transfer_remote...");
+    let result = morpheum_sdk_svm::bridge::transfer_remote(
+        &provider,
+        &warp_route,
+        &token.mint,
         args.destination_domain,
-        &recipient,
-        &args.token,
-        &args.amount,
-        "submit a Warp Route transfer_remote instruction to Solana",
-    );
+        recipient,
+        amount,
+    )
+    .map_err(|e| CliError::chain("SVM", format!("transfer_remote: {e}")))?;
+
+    dispatcher.output.success(format!(
+        "Bridge deposit submitted (SVM)\n\
+         Signature: {}\n\
+         MessageID: 0x{}\n\
+         Amount: {amount} {} -> Morpheum domain {}",
+        result.signature, hex::encode(result.message_id),
+        args.token, args.destination_domain,
+    ));
 
     Ok(())
 }
@@ -256,7 +333,7 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
 
 #[cfg(feature = "_transport")]
 async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    use morpheum_sdk_native::gmp::WarpRouteTransferBuilder;
+    use morpheum_sdk_cosmwasm::WarpRouteTransferBuilder;
 
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let from_address = hex::encode(signer.account_id().0);
@@ -270,10 +347,10 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
     let chain_label = args.chain.label();
 
     let request = WarpRouteTransferBuilder::new()
-        .sender(from_address)
+        .sender(&from_address)
+        .warp_route_contract(&args.warp_route_contract)
         .destination_domain(args.destination_domain)
         .recipient(recipient_bytes)
-        .asset_index(args.asset_index)
         .amount(&args.amount)
         .build()
         .map_err(CliError::Sdk)?;
@@ -288,10 +365,11 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 
     dispatcher.output.success(format!(
         "Warp Route withdrawal submitted ({chain_label})\n\
+         Contract: {}\n\
          Destination domain: {}\n\
-         Amount: {} (asset {})\n\
+         Amount: {}\n\
          TxHash: {txhash}",
-        args.destination_domain, args.amount, args.asset_index,
+        args.warp_route_contract, args.destination_domain, args.amount,
     ));
 
     Ok(())
@@ -308,14 +386,27 @@ async fn withdraw(_args: WithdrawArgs, _dispatcher: &Dispatcher) -> Result<(), C
 
 async fn status(args: StatusArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let chain_label = args.chain.label();
+    let message_id = args.message_id.strip_prefix("0x").unwrap_or(&args.message_id);
+
+    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let mut client = morpheum_proto::gmp::v1::query_client::QueryClient::new(channel);
+
+    let response = client
+        .query_hyperlane_delivery(tonic::Request::new(
+            morpheum_proto::gmp::v1::QueryHyperlaneDeliveryRequest {
+                message_id: message_id.to_string(),
+            },
+        ))
+        .await
+        .map_err(|e| CliError::Transport(format!("Hyperlane delivery query failed: {e}")))?
+        .into_inner();
+
+    let status_str = if response.delivered { "Delivered" } else { "Pending (not yet delivered)" };
 
     dispatcher.output.success(format!(
-        "Bridge status lookup ({chain_label})\n\
-         TxHash: {}\n\
-         Chain: {}\n\n\
-         Status: pending (detailed lookup requires indexer integration — coming soon)",
-        args.tx_hash,
-        args.chain_name.as_deref().unwrap_or("default"),
+        "Bridge status ({chain_label})\n\
+         MessageID: 0x{message_id}\n\
+         Status: {status_str}",
     ));
 
     Ok(())

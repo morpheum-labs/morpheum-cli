@@ -1,4 +1,4 @@
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 
 use morpheum_sdk_native::x402::{
     RegisterPolicyBuilder, UpdatePolicyBuilder, RotateAddressBuilder,
@@ -12,11 +12,15 @@ use crate::error::CliError;
 
 /// Transaction commands for the x402 autonomous payment module.
 ///
-/// Manages spending policies, payment address rotation, and outbound
-/// payment approval for AI agents using the x402 protocol (HTTP 402 +
-/// signed payment requests with TEE-attested settlement).
+/// Manages spending policies, payment address rotation, outbound
+/// payment approval, and cross-chain x402 payment execution for AI agents
+/// using the x402 protocol (HTTP 402 + signed payment requests with
+/// TEE-attested settlement).
 #[derive(Subcommand)]
 pub enum X402Commands {
+    /// Pay a Morpheum agent from an external chain (EVM/SVM)
+    Pay(PayArgs),
+
     /// Register a new spending policy for an agent
     RegisterPolicy(RegisterPolicyArgs),
 
@@ -31,6 +35,52 @@ pub enum X402Commands {
 
     /// Settle a cross-chain bridge payment (relay/operator)
     SettleBridgePayment(SettleBridgePaymentArgs),
+}
+
+/// Supported chain types for x402 payment.
+#[derive(Clone, Debug, ValueEnum)]
+pub enum X402ChainType {
+    Evm,
+    Svm,
+}
+
+#[derive(Args)]
+pub struct PayArgs {
+    /// Chain type for the source-chain payment
+    #[arg(long, value_enum)]
+    pub chain: X402ChainType,
+
+    /// Specific chain name (e.g. "ethereum", "base", "solana")
+    #[arg(long)]
+    pub chain_name: Option<String>,
+
+    /// Morpheum agent ID (hex string) to pay
+    #[arg(long)]
+    pub agent: String,
+
+    /// Payment amount in human-readable units (e.g. "50" for 50 USDC)
+    #[arg(long)]
+    pub amount: String,
+
+    /// Token symbol (default: USDC)
+    #[arg(long, default_value = "USDC")]
+    pub token: String,
+
+    /// Service-specific memo
+    #[arg(long, default_value = "")]
+    pub memo: String,
+
+    /// GMP reply channel
+    #[arg(long, default_value = "hyperlane")]
+    pub reply_channel: String,
+
+    /// Hex-encoded payment ID (optional; auto-generated if omitted)
+    #[arg(long)]
+    pub payment_id: Option<String>,
+
+    /// Key name to sign with
+    #[arg(long, default_value = "default")]
+    pub from: String,
 }
 
 #[derive(Args)]
@@ -214,12 +264,222 @@ pub struct SettleBridgePaymentArgs {
 
 pub async fn execute(cmd: X402Commands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
+        X402Commands::Pay(args) => pay(args, &dispatcher).await,
         X402Commands::RegisterPolicy(args) => register_policy(args, &dispatcher).await,
         X402Commands::UpdatePolicy(args) => update_policy(args, &dispatcher).await,
         X402Commands::RotateAddress(args) => rotate_address(args, &dispatcher).await,
         X402Commands::ApproveOutbound(args) => approve_outbound(args, &dispatcher).await,
         X402Commands::SettleBridgePayment(args) => settle_bridge_payment(args, &dispatcher).await,
     }
+}
+
+async fn pay(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    match args.chain {
+        X402ChainType::Evm => pay_evm(args, dispatcher).await,
+        X402ChainType::Svm => pay_svm(args, dispatcher).await,
+    }
+}
+
+async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    use morpheum_sdk_evm::alloy::primitives::{FixedBytes, U256};
+    use morpheum_sdk_evm::config::ChainRegistry;
+    use morpheum_sdk_core::ChainRegistryOps as _;
+
+    let chain_name = args.chain_name.as_deref().unwrap_or("ethereum");
+
+    let registry = ChainRegistry::load_with_defaults(morpheum_sdk_evm::DEFAULT_CHAINS_TOML)
+        .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
+
+    let (chain, token) = registry
+        .resolve(chain_name, &args.token)
+        .map_err(|e| CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}")))?;
+
+    let settlement = token.settlement_contract.ok_or_else(|| {
+        CliError::chain("EVM", format!("no settlement contract configured for {} on {chain_name}", args.token))
+    })?;
+
+    let alloy_signer = dispatcher.keyring.get_evm_signer(&args.from)?;
+    let from_address = format!("{:#x}", morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer));
+
+    let agent_bytes = hex::decode(args.agent.strip_prefix("0x").unwrap_or(&args.agent))
+        .map_err(|e| CliError::invalid_input(format!("invalid agent hex: {e}")))?;
+    let mut agent_id = [0u8; 32];
+    if agent_bytes.len() <= 32 {
+        agent_id[32 - agent_bytes.len()..].copy_from_slice(&agent_bytes);
+    } else {
+        return Err(CliError::invalid_input("agent ID must be <= 32 bytes"));
+    }
+
+    let payment_id_bytes = match &args.payment_id {
+        Some(hex_str) => {
+            let decoded = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
+                .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
+            let mut buf = [0u8; 32];
+            if decoded.len() != 32 {
+                return Err(CliError::invalid_input("payment_id must be exactly 32 bytes"));
+            }
+            buf.copy_from_slice(&decoded);
+            buf
+        }
+        None => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+            let mut buf = [0u8; 32];
+            buf[..16].copy_from_slice(&ts.to_le_bytes());
+            buf[16..].copy_from_slice(&agent_id[..16]);
+            buf
+        }
+    };
+
+    let amount_parts: Vec<&str> = args.amount.split('.').collect();
+    let (whole, frac) = match amount_parts.len() {
+        1 => (amount_parts[0], ""),
+        2 => (amount_parts[0], amount_parts[1]),
+        _ => return Err(CliError::invalid_input("invalid amount format")),
+    };
+    let whole_val: u128 = whole.parse().map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+    let frac_len = frac.len();
+    let frac_val: u128 = if frac.is_empty() { 0 } else {
+        frac.parse().map_err(|e| CliError::invalid_input(format!("invalid amount frac: {e}")))?
+    };
+    let dec = token.decimals as u32;
+    let scale = 10u128.pow(dec);
+    let frac_scale = 10u128.pow(dec.saturating_sub(frac_len as u32));
+    let raw_amount = U256::from(whole_val * scale + frac_val * frac_scale);
+
+    dispatcher.output.info(format!(
+        "x402 payment (EVM)\n\
+         From: {from_address}\n\
+         Chain: {chain_name}\n\
+         Settlement: {settlement:#x}\n\
+         Agent: 0x{}\n\
+         Amount: {} {} ({raw_amount} raw)\n\
+         Memo: {}",
+        hex::encode(agent_id), args.amount, args.token, args.memo,
+    ));
+
+    let provider = morpheum_sdk_evm::build_provider(&chain.rpc_url, alloy_signer.clone())
+        .map_err(|e| CliError::chain("EVM", format!("provider: {e}")))?;
+
+    dispatcher.output.info("Approving USDC spend for settlement contract...");
+    morpheum_sdk_evm::approve_erc20(&provider, token.address, settlement, raw_amount)
+        .await
+        .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
+
+    dispatcher.output.info("Calling pay()...");
+    let params = morpheum_sdk_evm::X402PayParams {
+        payment_id: FixedBytes(payment_id_bytes),
+        target_agent_id: FixedBytes(agent_id),
+        amount: raw_amount,
+        memo: args.memo,
+        reply_channel: args.reply_channel,
+        msg_value: U256::ZERO,
+    };
+
+    let result = morpheum_sdk_evm::pay_x402(&provider, settlement, &alloy_signer, &params)
+        .await
+        .map_err(|e| CliError::chain("EVM", format!("pay: {e}")))?;
+
+    dispatcher.output.success(format!(
+        "x402 payment submitted (EVM)\n\
+         TxHash: {:#x}\n\
+         PaymentID: {:#x}\n\
+         Amount: {} {}",
+        result.tx_hash, result.payment_id, args.amount, args.token,
+    ));
+
+    Ok(())
+}
+
+async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    use morpheum_sdk_svm::solana_sdk::signer::keypair::Keypair;
+    use morpheum_sdk_svm::config::SolanaChainRegistry;
+    use morpheum_sdk_core::ChainRegistryOps as _;
+
+    let chain_name = args.chain_name.as_deref().unwrap_or("solana");
+
+    let registry = SolanaChainRegistry::load_with_defaults(morpheum_sdk_svm::DEFAULT_CHAINS_TOML)
+        .map_err(|e| CliError::chain("SVM", format!("chain registry: {e}")))?;
+
+    let (chain, token) = registry
+        .resolve(chain_name, &args.token)
+        .map_err(|e| CliError::chain("SVM", format!("resolving chain '{chain_name}': {e}")))?;
+
+    let solana_signer = dispatcher.keyring.get_solana_signer(&args.from)?;
+    let from_address = bs58::encode(solana_signer.public_key_bytes()).into_string();
+
+    let agent_bytes = hex::decode(args.agent.strip_prefix("0x").unwrap_or(&args.agent))
+        .map_err(|e| CliError::invalid_input(format!("invalid agent hex: {e}")))?;
+    let mut agent_id = [0u8; 32];
+    if agent_bytes.len() <= 32 {
+        agent_id[32 - agent_bytes.len()..].copy_from_slice(&agent_bytes);
+    } else {
+        return Err(CliError::invalid_input("agent ID must be <= 32 bytes"));
+    }
+
+    let payment_id = match &args.payment_id {
+        Some(hex_str) => {
+            let decoded = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
+                .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
+            let mut buf = [0u8; 32];
+            if decoded.len() != 32 {
+                return Err(CliError::invalid_input("payment_id must be exactly 32 bytes"));
+            }
+            buf.copy_from_slice(&decoded);
+            buf
+        }
+        None => {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+            let mut buf = [0u8; 32];
+            buf[..16].copy_from_slice(&ts.to_le_bytes());
+            buf[16..].copy_from_slice(&agent_id[..16]);
+            buf
+        }
+    };
+
+    let amount: u64 = args.amount.parse()
+        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+
+    dispatcher.output.info(format!(
+        "x402 payment (SVM)\n\
+         From: {from_address}\n\
+         Chain: {chain_name}\n\
+         Token: {} (mint: {})\n\
+         Agent: 0x{}\n\
+         Amount: {amount}",
+        args.token, token.mint, hex::encode(agent_id),
+    ));
+
+    let mut keypair_bytes = [0u8; 64];
+    keypair_bytes[..32].copy_from_slice(&solana_signer.private_key_bytes());
+    keypair_bytes[32..].copy_from_slice(&solana_signer.public_key_bytes());
+    let keypair = Keypair::from_bytes(&keypair_bytes)
+        .map_err(|e| CliError::chain("SVM", format!("keypair: {e}")))?;
+
+    let provider = morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)
+        .map_err(|e| CliError::chain("SVM", format!("provider: {e}")))?;
+
+    dispatcher.output.info("Calling pay_x402...");
+    let result = morpheum_sdk_svm::x402::pay_x402(
+        &provider,
+        &token.mint,
+        payment_id,
+        agent_id,
+        amount,
+        &args.reply_channel,
+    )
+    .map_err(|e| CliError::chain("SVM", format!("pay_x402: {e}")))?;
+
+    dispatcher.output.success(format!(
+        "x402 payment submitted (SVM)\n\
+         Signature: {}\n\
+         PaymentID: 0x{}\n\
+         Amount: {amount} {}",
+        result.signature, hex::encode(result.payment_id), args.token,
+    ));
+
+    Ok(())
 }
 
 async fn register_policy(
