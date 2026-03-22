@@ -39,6 +39,8 @@ pub mod gov;
 pub mod cosmwasm;
 #[cfg(feature = "cctp")]
 pub mod cctp;
+#[cfg(feature = "svm")]
+pub mod svm_usdc;
 
 /// On-chain query commands across all Morpheum modules.
 ///
@@ -118,6 +120,11 @@ pub enum QueryCommands {
     #[cfg(feature = "cctp")]
     #[command(subcommand)]
     Cctp(cctp::CctpQueryCommands),
+
+    /// SVM USDC native program queries (program-id, balance, allowance)
+    #[cfg(feature = "svm")]
+    #[command(subcommand)]
+    SvmUsdc(svm_usdc::SvmUsdcQueryCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -159,5 +166,7 @@ pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), C
         QueryCommands::Cosmwasm(sub) => cosmwasm::execute(sub, dispatcher).await,
         #[cfg(feature = "cctp")]
         QueryCommands::Cctp(sub) => cctp::execute(sub, dispatcher).await,
+        #[cfg(feature = "svm")]
+        QueryCommands::SvmUsdc(sub) => svm_usdc::execute(sub, dispatcher).await,
     }
 }

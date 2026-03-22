@@ -37,6 +37,8 @@ pub mod gmp;
 pub mod gov;
 #[cfg(feature = "cosmwasm")]
 pub mod cosmwasm;
+#[cfg(feature = "svm")]
+pub mod svm_usdc;
 
 /// On-chain transaction commands across all Morpheum modules.
 ///
@@ -112,6 +114,11 @@ pub enum TxCommands {
     #[cfg(feature = "cosmwasm")]
     #[command(subcommand)]
     Cosmwasm(cosmwasm::CosmwasmCommands),
+
+    /// SVM USDC native program operations (transfer, approve, transferFrom)
+    #[cfg(feature = "svm")]
+    #[command(subcommand)]
+    SvmUsdc(svm_usdc::SvmUsdcCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -151,5 +158,7 @@ pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliE
         TxCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
         #[cfg(feature = "cosmwasm")]
         TxCommands::Cosmwasm(sub) => cosmwasm::execute(sub, dispatcher).await,
+        #[cfg(feature = "svm")]
+        TxCommands::SvmUsdc(sub) => svm_usdc::execute(sub, dispatcher).await,
     }
 }

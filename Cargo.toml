@@ -118,10 +118,11 @@ x402 = ["_transport"]
 gmp = ["_transport", "interop"]
 cosmwasm = ["_transport"]
 cctp = ["_transport", "dep:morpheum-sdk-cctp"]
+svm = ["_transport"]
 gov = ["_transport", "dep:morpheum-sdk-gov"]
 # Enable all modules at once.
 modules = ["identity", "bank", "agent_registry", "inference_registry", "interop", "job",
-    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "cctp", "gov"]
+    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "cctp", "svm", "gov"]
 
 [profile.release]
 opt-level = 3

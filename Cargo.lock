@@ -4721,9 +4721,12 @@ dependencies = [
 name = "morpheum-sdk-svm"
 version = "0.1.0"
 dependencies = [
+ "blake3",
  "borsh 1.6.1",
  "bs58",
  "dirs-next",
+ "hex",
+ "morpheum-proto",
  "morpheum-sdk-core",
  "serde",
  "serde_json",
