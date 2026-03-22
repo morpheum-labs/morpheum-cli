@@ -30,6 +30,16 @@ impl ChainType {
     }
 }
 
+/// Bridge protocol to use for the transfer.
+#[derive(Clone, Debug, Default, ValueEnum)]
+pub enum BridgeProtocol {
+    /// Hyperlane Warp Route (default, locks & transfers wrapped token)
+    #[default]
+    WarpRoute,
+    /// Circle CCTP via `CctpHyperlaneWrapper` (burns native USDC)
+    Cctp,
+}
+
 /// Bridge commands for cross-chain token transfers via Hyperlane Warp Routes.
 #[derive(Subcommand)]
 pub enum BridgeCommands {
@@ -72,6 +82,18 @@ pub struct DepositArgs {
     /// Key name to sign with
     #[arg(long, default_value = "default")]
     pub from: String,
+
+    /// Bridge protocol: warp-route (default) or cctp
+    #[arg(long, value_enum, default_value = "warp-route")]
+    pub protocol: BridgeProtocol,
+
+    /// `CctpHyperlaneWrapper` contract address (required for --protocol cctp)
+    #[arg(long)]
+    pub wrapper: Option<String>,
+
+    /// Optional hex-encoded calldata for post-mint hook actions (CCTP only)
+    #[arg(long)]
+    pub calldata: Option<String>,
 }
 
 #[derive(Args)]
@@ -88,7 +110,7 @@ pub struct WithdrawArgs {
     #[arg(long)]
     pub recipient: String,
 
-    /// CosmWasm Warp Route contract address on Morpheum
+    /// `CosmWasm` Warp Route contract address on Morpheum
     #[arg(long)]
     pub warp_route_contract: String,
 
@@ -110,6 +132,14 @@ pub struct StatusArgs {
     /// Hyperlane message ID (hex) to check delivery status
     #[arg(long)]
     pub message_id: String,
+
+    /// Bridge protocol used (affects status output)
+    #[arg(long, value_enum, default_value = "warp-route")]
+    pub protocol: BridgeProtocol,
+
+    /// CCTP handler contract address (for --protocol cctp status queries)
+    #[arg(long)]
+    pub cctp_handler: Option<String>,
 }
 
 pub async fn execute(cmd: BridgeCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
@@ -189,9 +219,13 @@ fn parse_token_amount(amount_str: &str, decimals: u8) -> Result<U256, CliError> 
 // ── Deposit (External -> Morpheum) ──────────────────────────────────
 
 async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    match args.chain {
-        ChainType::Evm => deposit_evm(args, dispatcher).await,
-        ChainType::Svm => deposit_svm(args, dispatcher).await,
+    match (&args.chain, &args.protocol) {
+        (ChainType::Evm, BridgeProtocol::Cctp) => deposit_evm_cctp(args, dispatcher).await,
+        (ChainType::Evm, BridgeProtocol::WarpRoute) => deposit_evm(args, dispatcher).await,
+        (ChainType::Svm, BridgeProtocol::Cctp) => Err(CliError::invalid_input(
+            "CCTP protocol is only supported for EVM chains",
+        )),
+        (ChainType::Svm, BridgeProtocol::WarpRoute) => deposit_svm(args, dispatcher).await,
     }
 }
 
@@ -253,6 +287,103 @@ async fn deposit_evm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
         "Bridge deposit submitted (EVM)\n\
          TxHash: {:#x}\n\
          MessageID: {:#x}\n\
+         Amount: {} {} -> Morpheum domain {}",
+        result.tx_hash, result.message_id,
+        args.amount, args.token, args.destination_domain,
+    ));
+
+    Ok(())
+}
+
+async fn deposit_evm_cctp(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let chain_name = args.chain_name.as_deref().unwrap_or("ethereum");
+
+    let registry = ChainRegistry::load_with_defaults(morpheum_sdk_evm::DEFAULT_CHAINS_TOML)
+        .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
+
+    let (chain, token) = registry
+        .resolve(chain_name, &args.token)
+        .map_err(|e| CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}")))?;
+
+    let wrapper_str = args.wrapper.as_deref().ok_or_else(|| {
+        CliError::invalid_input("--wrapper is required for CCTP deposits")
+    })?;
+    let wrapper: morpheum_sdk_evm::alloy::primitives::Address = wrapper_str
+        .parse()
+        .map_err(|e| CliError::chain("EVM", format!("invalid wrapper address: {e}")))?;
+
+    let alloy_signer = dispatcher.keyring.get_evm_signer(&args.from)?;
+    let from_address = format!("{:#x}", morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer));
+    let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, true)?;
+
+    let amount = parse_token_amount(&args.amount, token.decimals)?;
+
+    let calldata_bytes = match &args.calldata {
+        Some(hex_str) => {
+            let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+            morpheum_sdk_evm::alloy::primitives::Bytes::from(
+                hex::decode(s)
+                    .map_err(|e| CliError::invalid_input(format!("invalid calldata hex: {e}")))?,
+            )
+        }
+        None => morpheum_sdk_evm::alloy::primitives::Bytes::new(),
+    };
+
+    dispatcher.output.info(format!(
+        "CCTP bridge deposit\n\
+         From: {from_address}\n\
+         Chain: {chain_name} (RPC: {})\n\
+         Token: {} ({:#x})\n\
+         Wrapper: {wrapper:#x}\n\
+         Amount: {} ({} raw)\n\
+         Destination domain: {}\n\
+         Recipient: 0x{}",
+        chain.rpc_url, args.token, token.address,
+        args.amount, amount, args.destination_domain, hex::encode(recipient),
+    ));
+
+    let provider = morpheum_sdk_evm::build_provider(&chain.rpc_url, alloy_signer)
+        .map_err(|e| CliError::chain("EVM", format!("provider: {e}")))?;
+
+    dispatcher.output.info("Approving USDC spend for CCTP wrapper...");
+    let approve_hash = morpheum_sdk_evm::approve_erc20(&provider, token.address, wrapper, amount)
+        .await
+        .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
+    dispatcher.output.info(format!("Approval confirmed: {approve_hash:#x}"));
+
+    dispatcher.output.info("Quoting Hyperlane dispatch fee...");
+    let fee = morpheum_sdk_evm::cctp::quote_cctp_dispatch(
+        &provider,
+        wrapper,
+        amount,
+        FixedBytes(recipient),
+        calldata_bytes.clone(),
+    )
+    .await
+    .map_err(|e| CliError::chain("EVM", format!("quoteDispatch: {e}")))?;
+    dispatcher.output.info(format!("Dispatch fee: {fee} wei"));
+
+    dispatcher.output.info("Calling bridgeUsdc (CCTP burn + Hyperlane dispatch)...");
+    let result = morpheum_sdk_evm::cctp::bridge_usdc(
+        &provider,
+        wrapper,
+        amount,
+        FixedBytes(recipient),
+        calldata_bytes,
+        fee,
+    )
+    .await
+    .map_err(|e| CliError::chain("EVM", format!("bridgeUsdc: {e}")))?;
+
+    let nonce_str = result
+        .cctp_nonce
+        .map_or_else(|| "N/A".to_string(), |n| n.to_string());
+
+    dispatcher.output.success(format!(
+        "CCTP bridge deposit submitted\n\
+         TxHash: {:#x}\n\
+         MessageID: {:#x}\n\
+         CCTP Nonce: {nonce_str}\n\
          Amount: {} {} -> Morpheum domain {}",
         result.tx_hash, result.message_id,
         args.amount, args.token, args.destination_domain,
@@ -401,13 +532,112 @@ async fn status(args: StatusArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
         .map_err(|e| CliError::Transport(format!("Hyperlane delivery query failed: {e}")))?
         .into_inner();
 
-    let status_str = if response.delivered { "Delivered" } else { "Pending (not yet delivered)" };
+    let delivery_str = if response.delivered { "Delivered" } else { "Pending (not yet delivered)" };
 
-    dispatcher.output.success(format!(
-        "Bridge status ({chain_label})\n\
-         MessageID: 0x{message_id}\n\
-         Status: {status_str}",
-    ));
+    match args.protocol {
+        BridgeProtocol::WarpRoute => {
+            dispatcher.output.success(format!(
+                "Bridge status ({chain_label})\n\
+                 MessageID: 0x{message_id}\n\
+                 Status: {delivery_str}",
+            ));
+        }
+        BridgeProtocol::Cctp => {
+            use std::fmt::Write;
+            let mut cctp_status = format!(
+                "CCTP Bridge status ({chain_label})\n\
+                 MessageID: 0x{message_id}\n\
+                 Hyperlane Delivery: {delivery_str}",
+            );
+
+            if let Some(handler) = &args.cctp_handler {
+                let cctp_info = query_cctp_status(dispatcher, handler, message_id).await;
+                let _ = write!(cctp_status, "\n Attestation: {cctp_info}");
+            } else {
+                cctp_status.push_str(
+                    "\n CCTP Fulfillment: (pass --cctp-handler to query)",
+                );
+            }
+
+            dispatcher.output.success(cctp_status);
+        }
+    }
 
     Ok(())
+}
+
+#[derive(Clone, prost::Message)]
+struct CctpQReq {
+    #[prost(string, tag = "1")]
+    address: String,
+    #[prost(bytes = "vec", tag = "2")]
+    query_data: Vec<u8>,
+}
+
+#[derive(Clone, prost::Message)]
+struct CctpQResp {
+    #[prost(bytes = "vec", tag = "1")]
+    data: Vec<u8>,
+}
+
+#[derive(serde::Deserialize)]
+struct CctpPendingResp {
+    transfer: Option<serde_json::Value>,
+}
+
+async fn query_cctp_status(
+    dispatcher: &Dispatcher,
+    handler: &str,
+    message_hash: &str,
+) -> String {
+    let query_msg = serde_json::json!({
+        "pending_by_hash": { "hash": message_hash }
+    });
+    let query_data = match serde_json::to_vec(&query_msg) {
+        Ok(d) => d,
+        Err(e) => return format!("serialization error: {e}"),
+    };
+
+    let channel = match crate::transport::connect(&dispatcher.config.rpc_url).await {
+        Ok(c) => c,
+        Err(e) => return format!("connection error: {e}"),
+    };
+
+    let mut grpc = tonic::client::Grpc::new(channel);
+    if let Err(e) = grpc.ready().await {
+        return format!("service not ready: {e}");
+    }
+
+    let path = match "/cosmwasm.wasm.v1.Query/SmartContractState"
+        .parse::<http::uri::PathAndQuery>()
+    {
+        Ok(p) => p,
+        Err(e) => return format!("path error: {e}"),
+    };
+
+    let codec: tonic_prost::ProstCodec<CctpQReq, CctpQResp> =
+        tonic_prost::ProstCodec::default();
+
+    let resp = match grpc
+        .unary(
+            tonic::Request::new(CctpQReq {
+                address: handler.to_string(),
+                query_data,
+            }),
+            path,
+            codec,
+        )
+        .await
+    {
+        Ok(r) => r.into_inner(),
+        Err(e) => return format!("query failed: {e}"),
+    };
+
+    match serde_json::from_slice::<CctpPendingResp>(&resp.data) {
+        Ok(pr) => match pr.transfer {
+            Some(_) => "Pending (awaiting attestation/fulfillment)".to_string(),
+            None => "Fulfilled (transfer completed, USDC minted)".to_string(),
+        },
+        Err(e) => format!("response parse error: {e}"),
+    }
 }

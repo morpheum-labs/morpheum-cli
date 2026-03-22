@@ -21,9 +21,14 @@ pub struct BalanceArgs {
     #[arg(long)]
     pub address: String,
 
-    /// Asset index
+    /// Asset index (numeric). Overridden by --asset if provided.
     #[arg(long, default_value = "0")]
     pub asset_index: u64,
+
+    /// Asset name shorthand (e.g. "USDC" -> 1, "MORM" -> 0).
+    /// Takes precedence over --asset-index.
+    #[arg(long)]
+    pub asset: Option<String>,
 }
 
 #[derive(Args)]
@@ -40,13 +45,29 @@ pub async fn execute(cmd: BankQueryCommands, dispatcher: Dispatcher) -> Result<(
     }
 }
 
+/// Resolves an asset name shorthand to a numeric asset index.
+fn resolve_asset_index(name: &str) -> Result<u64, CliError> {
+    match name.to_uppercase().as_str() {
+        "MORM" => Ok(0),
+        "USDC" => Ok(1),
+        _ => Err(CliError::invalid_input(format!(
+            "unknown asset name '{name}' — known: MORM (0), USDC (1)"
+        ))),
+    }
+}
+
 async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let asset_index = match &args.asset {
+        Some(name) => resolve_asset_index(name)?,
+        None => args.asset_index,
+    };
+
     let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
     let mut client = morpheum_proto::bank::v1::query_client::QueryClient::new(channel);
     let response = client
         .query_balance(tonic::Request::new(morpheum_proto::bank::v1::QueryBalanceRequest {
             address: args.address.clone(),
-            asset_index: args.asset_index,
+            asset_index,
             chain_type: None,
         }))
         .await

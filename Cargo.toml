@@ -42,6 +42,7 @@ morpheum-sdk-core = { path = "../morpheum-sdk/crates/core", features = ["chain-r
 morpheum-sdk-evm = { path = "../morpheum-sdk/crates/evm" }
 morpheum-sdk-svm = { path = "../morpheum-sdk/crates/svm" }
 morpheum-sdk-cosmwasm = { path = "../morpheum-sdk/crates/cosmwasm" }
+morpheum-sdk-cctp = { path = "../morpheum-sdk/crates/cctp", optional = true }
 morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std"], optional = true }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
 morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
@@ -116,10 +117,11 @@ directory = ["_transport"]
 x402 = ["_transport"]
 gmp = ["_transport", "interop"]
 cosmwasm = ["_transport"]
+cctp = ["_transport", "dep:morpheum-sdk-cctp"]
 gov = ["_transport", "dep:morpheum-sdk-gov"]
 # Enable all modules at once.
 modules = ["identity", "bank", "agent_registry", "inference_registry", "interop", "job",
-    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "gov"]
+    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "cctp", "gov"]
 
 [profile.release]
 opt-level = 3

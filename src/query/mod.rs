@@ -37,6 +37,8 @@ pub mod gmp;
 pub mod gov;
 #[cfg(feature = "cosmwasm")]
 pub mod cosmwasm;
+#[cfg(feature = "cctp")]
+pub mod cctp;
 
 /// On-chain query commands across all Morpheum modules.
 ///
@@ -111,6 +113,11 @@ pub enum QueryCommands {
     #[cfg(feature = "cosmwasm")]
     #[command(subcommand)]
     Cosmwasm(cosmwasm::CosmwasmQueryCommands),
+
+    /// CCTP handler queries (config, pending, routes)
+    #[cfg(feature = "cctp")]
+    #[command(subcommand)]
+    Cctp(cctp::CctpQueryCommands),
 }
 
 #[allow(clippy::unused_async, unused_variables)]
@@ -150,5 +157,7 @@ pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), C
         QueryCommands::Gov(sub) => gov::execute(sub, dispatcher).await,
         #[cfg(feature = "cosmwasm")]
         QueryCommands::Cosmwasm(sub) => cosmwasm::execute(sub, dispatcher).await,
+        #[cfg(feature = "cctp")]
+        QueryCommands::Cctp(sub) => cctp::execute(sub, dispatcher).await,
     }
 }
