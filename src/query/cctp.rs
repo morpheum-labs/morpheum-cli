@@ -17,8 +17,8 @@ pub enum CctpQueryCommands {
     /// List all pending CCTP transfers
     Pending(CctpPendingArgs),
 
-    /// Query a specific pending transfer by message hash
-    PendingByHash(CctpPendingByHashArgs),
+    /// Query a specific pending transfer by source domain and nonce
+    PendingByNonce(CctpPendingByNonceArgs),
 
     /// List enrolled remote routes
     Routes(CctpRoutesArgs),
@@ -39,14 +39,18 @@ pub struct CctpPendingArgs {
 }
 
 #[derive(Args)]
-pub struct CctpPendingByHashArgs {
+pub struct CctpPendingByNonceArgs {
     /// CCTP handler contract address (morm1...)
     #[arg(long)]
     pub contract: String,
 
-    /// Message hash (hex string)
+    /// CCTP source domain (e.g. 0 for Ethereum)
     #[arg(long)]
-    pub hash: String,
+    pub source_domain: u32,
+
+    /// CCTP nonce from the source chain burn
+    #[arg(long)]
+    pub nonce: u64,
 }
 
 #[derive(Args)]
@@ -60,7 +64,7 @@ pub async fn execute(cmd: CctpQueryCommands, dispatcher: Dispatcher) -> Result<(
     match cmd {
         CctpQueryCommands::Config(args) => config(args, &dispatcher).await,
         CctpQueryCommands::Pending(args) => pending(args, &dispatcher).await,
-        CctpQueryCommands::PendingByHash(args) => pending_by_hash(args, &dispatcher).await,
+        CctpQueryCommands::PendingByNonce(args) => pending_by_nonce(args, &dispatcher).await,
         CctpQueryCommands::Routes(args) => routes(args, &dispatcher).await,
     }
 }
@@ -151,15 +155,16 @@ async fn pending(args: CctpPendingArgs, dispatcher: &Dispatcher) -> Result<(), C
     Ok(())
 }
 
-async fn pending_by_hash(
-    args: CctpPendingByHashArgs,
+async fn pending_by_nonce(
+    args: CctpPendingByNonceArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let resp: morpheum_sdk_cctp::PendingTransferResponse = smart_query(
         dispatcher,
         &args.contract,
-        &morpheum_sdk_cctp::QueryMsg::PendingByHash {
-            hash: args.hash.clone(),
+        &morpheum_sdk_cctp::QueryMsg::PendingByNonce {
+            source_domain: args.source_domain,
+            nonce: args.nonce,
         },
     )
     .await?;
@@ -171,7 +176,10 @@ async fn pending_by_hash(
             println!("{json}");
         }
         None => {
-            println!("No pending transfer found for hash: {}", args.hash);
+            println!(
+                "No pending transfer found for domain {} nonce {}",
+                args.source_domain, args.nonce
+            );
         }
     }
     Ok(())
