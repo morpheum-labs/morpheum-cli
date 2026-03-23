@@ -1,9 +1,9 @@
 //! Bridge CLI command definitions and handlers.
 
 use clap::{Args, Subcommand, ValueEnum};
-use morpheum_sdk_evm::config::ChainRegistry;
+use morpheum_sdk_evm::config::{ChainRegistry, TokenType};
 use morpheum_sdk_evm::alloy::primitives::{FixedBytes, U256};
-use morpheum_sdk_svm::config::SolanaChainRegistry;
+use morpheum_sdk_svm::config::{SolanaChainRegistry, SvmTokenType};
 
 use morpheum_signing_native::signer::Signer;
 
@@ -102,19 +102,27 @@ pub struct WithdrawArgs {
     #[arg(long, value_enum)]
     pub chain: ChainType,
 
+    /// Chain name (e.g. "sepolia", "devnet") — used with --token to resolve the warp route contract
+    #[arg(long)]
+    pub chain_name: Option<String>,
+
+    /// Token symbol (e.g. "USDC", "ETH", "SOL") — resolves the warp route contract from registry
+    #[arg(long)]
+    pub token: Option<String>,
+
     /// Hyperlane domain ID of the destination chain
     #[arg(long)]
-    pub destination_domain: u32,
+    pub destination_domain: Option<u32>,
 
     /// 32-byte hex recipient address on the destination chain
     #[arg(long)]
     pub recipient: String,
 
-    /// `CosmWasm` Warp Route contract address on Morpheum
+    /// `CosmWasm` Warp Route contract address on Morpheum (auto-resolved when --token is set)
     #[arg(long)]
-    pub warp_route_contract: String,
+    pub warp_route_contract: Option<String>,
 
-    /// Amount to withdraw (in raw token units)
+    /// Amount to withdraw (human-readable, e.g. "100" or "0.05")
     #[arg(long)]
     pub amount: String,
 
@@ -216,6 +224,44 @@ fn parse_token_amount(amount_str: &str, decimals: u8) -> Result<U256, CliError> 
     Ok(U256::from(raw))
 }
 
+/// Parses a human-readable amount (e.g. "0.05") into raw `u64` units
+/// using the token's decimal precision (e.g. 9 decimals -> 50_000_000).
+fn parse_svm_amount(amount_str: &str, decimals: u8) -> Result<u64, CliError> {
+    let parts: Vec<&str> = amount_str.split('.').collect();
+    let (whole, frac) = match parts.len() {
+        1 => (parts[0], ""),
+        2 => (parts[0], parts[1]),
+        _ => return Err(CliError::invalid_input("invalid amount format")),
+    };
+
+    let whole_val: u64 = whole
+        .parse()
+        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+
+    let frac_len = frac.len();
+    if frac_len > decimals as usize {
+        return Err(CliError::invalid_input(format!(
+            "amount has {frac_len} fractional digits but token only supports {decimals}"
+        )));
+    }
+
+    let frac_val: u64 = if frac.is_empty() {
+        0
+    } else {
+        frac.parse()
+            .map_err(|e| CliError::invalid_input(format!("invalid fractional part: {e}")))?
+    };
+
+    let scale = 10u64.pow(decimals as u32);
+    let frac_scale = 10u64.pow((decimals as u32) - (frac_len as u32));
+    let raw = whole_val
+        .checked_mul(scale)
+        .and_then(|v| v.checked_add(frac_val.checked_mul(frac_scale)?))
+        .ok_or_else(|| CliError::invalid_input("amount overflow"))?;
+
+    Ok(raw)
+}
+
 // ── Deposit (External -> Morpheum) ──────────────────────────────────
 
 async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
@@ -249,48 +295,86 @@ async fn deposit_evm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
 
     let amount = parse_token_amount(&args.amount, token.decimals)?;
 
-    dispatcher.output.info(format!(
-        "EVM bridge deposit\n\
-         From: {from_address}\n\
-         Chain: {chain_name} (RPC: {})\n\
-         Token: {} ({:#x})\n\
-         Collateral: {:#x}\n\
-         Amount: {} ({} raw)\n\
-         Destination domain: {}\n\
-         Recipient: 0x{}",
-        chain.rpc_url, args.token, token.address, collateral,
-        args.amount, amount, args.destination_domain, hex::encode(recipient),
-    ));
-
     let provider = morpheum_sdk_evm::build_provider(&chain.rpc_url, alloy_signer)
         .map_err(|e| CliError::chain("EVM", format!("provider: {e}")))?;
 
-    dispatcher.output.info("Approving ERC-20 spend...");
-    let approve_hash = morpheum_sdk_evm::approve_erc20(&provider, token.address, collateral, amount)
-        .await
-        .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
-    dispatcher.output.info(format!("Approval confirmed: {approve_hash:#x}"));
+    match token.token_type {
+        TokenType::Native => {
+            dispatcher.output.info(format!(
+                "EVM bridge deposit (native)\n\
+                 From: {from_address}\n\
+                 Chain: {chain_name} (RPC: {})\n\
+                 Token: {} (native)\n\
+                 Warp Native: {:#x}\n\
+                 Amount: {} ({} raw)\n\
+                 Destination domain: {}\n\
+                 Recipient: 0x{}",
+                chain.rpc_url, args.token, collateral,
+                args.amount, amount, args.destination_domain, hex::encode(recipient),
+            ));
 
-    dispatcher.output.info("Calling transferRemote...");
-    let result = morpheum_sdk_evm::transfer_remote(
-        &provider,
-        collateral,
-        args.destination_domain,
-        FixedBytes(recipient),
-        amount,
-        U256::ZERO,
-    )
-    .await
-    .map_err(|e| CliError::chain("EVM", format!("transferRemote: {e}")))?;
+            dispatcher.output.info("Calling transferRemote (native)...");
+            let result = morpheum_sdk_evm::transfer_remote_native(
+                &provider,
+                collateral,
+                args.destination_domain,
+                FixedBytes(recipient),
+                amount,
+            )
+            .await
+            .map_err(|e| CliError::chain("EVM", format!("transferRemote native: {e}")))?;
 
-    dispatcher.output.success(format!(
-        "Bridge deposit submitted (EVM)\n\
-         TxHash: {:#x}\n\
-         MessageID: {:#x}\n\
-         Amount: {} {} -> Morpheum domain {}",
-        result.tx_hash, result.message_id,
-        args.amount, args.token, args.destination_domain,
-    ));
+            dispatcher.output.success(format!(
+                "Bridge deposit submitted (EVM native)\n\
+                 TxHash: {:#x}\n\
+                 MessageID: {:#x}\n\
+                 Amount: {} {} -> Morpheum domain {}",
+                result.tx_hash, result.message_id,
+                args.amount, args.token, args.destination_domain,
+            ));
+        }
+        TokenType::Erc20 => {
+            dispatcher.output.info(format!(
+                "EVM bridge deposit\n\
+                 From: {from_address}\n\
+                 Chain: {chain_name} (RPC: {})\n\
+                 Token: {} ({:#x})\n\
+                 Collateral: {:#x}\n\
+                 Amount: {} ({} raw)\n\
+                 Destination domain: {}\n\
+                 Recipient: 0x{}",
+                chain.rpc_url, args.token, token.address, collateral,
+                args.amount, amount, args.destination_domain, hex::encode(recipient),
+            ));
+
+            dispatcher.output.info("Approving ERC-20 spend...");
+            let approve_hash = morpheum_sdk_evm::approve_erc20(&provider, token.address, collateral, amount)
+                .await
+                .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
+            dispatcher.output.info(format!("Approval confirmed: {approve_hash:#x}"));
+
+            dispatcher.output.info("Calling transferRemote...");
+            let result = morpheum_sdk_evm::transfer_remote(
+                &provider,
+                collateral,
+                args.destination_domain,
+                FixedBytes(recipient),
+                amount,
+                U256::ZERO,
+            )
+            .await
+            .map_err(|e| CliError::chain("EVM", format!("transferRemote: {e}")))?;
+
+            dispatcher.output.success(format!(
+                "Bridge deposit submitted (EVM)\n\
+                 TxHash: {:#x}\n\
+                 MessageID: {:#x}\n\
+                 Amount: {} {} -> Morpheum domain {}",
+                result.tx_hash, result.message_id,
+                args.amount, args.token, args.destination_domain,
+            ));
+        }
+    }
 
     Ok(())
 }
@@ -404,10 +488,6 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
         .resolve(chain_name, &args.token)
         .map_err(|e| CliError::chain("SVM", format!("resolving chain '{chain_name}': {e}")))?;
 
-    let warp_route = chain.warp_route_program.ok_or_else(|| {
-        CliError::chain("SVM", format!("no warp_route_program configured for {chain_name}"))
-    })?;
-
     let mailbox = chain.hyperlane_mailbox_program.ok_or_else(|| {
         CliError::chain("SVM", format!("no hyperlane_mailbox_program configured for {chain_name}"))
     })?;
@@ -416,21 +496,7 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
     let from_address = bs58::encode(solana_signer.public_key_bytes()).into_string();
     let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, false)?;
 
-    let amount: u64 = args.amount.parse()
-        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
-
-    dispatcher.output.info(format!(
-        "SVM bridge deposit\n\
-         From: {from_address}\n\
-         Chain: {chain_name} (RPC: {})\n\
-         Token: {} (mint: {})\n\
-         Warp Route: {warp_route}\n\
-         Amount: {amount}\n\
-         Destination domain: {}\n\
-         Recipient: 0x{}",
-        chain.rpc_url, args.token, token.mint,
-        args.destination_domain, hex::encode(recipient),
-    ));
+    let amount = parse_svm_amount(&args.amount, token.decimals)?;
 
     let mut keypair_bytes = [0u8; 64];
     keypair_bytes[..32].copy_from_slice(&solana_signer.private_key_bytes());
@@ -441,35 +507,146 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
     let provider = morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)
         .map_err(|e| CliError::chain("SVM", format!("provider: {e}")))?;
 
-    dispatcher.output.info("Calling transfer_remote...");
-    let result = morpheum_sdk_svm::bridge::transfer_remote(
-        &provider,
-        &warp_route,
-        &mailbox,
-        &token.mint,
-        args.destination_domain,
-        recipient,
-        amount,
-    )
-    .map_err(|e| CliError::chain("SVM", format!("transfer_remote: {e}")))?;
+    match token.token_type {
+        SvmTokenType::Native => {
+            let warp_route = chain.native_warp_route_program.ok_or_else(|| {
+                CliError::chain("SVM", format!("no native_warp_route_program configured for {chain_name}"))
+            })?;
 
-    dispatcher.output.success(format!(
-        "Bridge deposit submitted (SVM)\n\
-         Signature: {}\n\
-         MessageID: 0x{}\n\
-         Amount: {amount} {} -> Morpheum domain {}",
-        result.signature, hex::encode(result.message_id),
-        args.token, args.destination_domain,
-    ));
+            dispatcher.output.info(format!(
+                "SVM bridge deposit (native)\n\
+                 From: {from_address}\n\
+                 Chain: {chain_name} (RPC: {})\n\
+                 Token: {} (native)\n\
+                 Native Warp Route: {warp_route}\n\
+                 Amount: {amount} lamports\n\
+                 Destination domain: {}\n\
+                 Recipient: 0x{}",
+                chain.rpc_url, args.token,
+                args.destination_domain, hex::encode(recipient),
+            ));
+
+            dispatcher.output.info("Calling transfer_remote_native...");
+            let result = morpheum_sdk_svm::bridge::transfer_remote_native(
+                &provider,
+                &warp_route,
+                &mailbox,
+                args.destination_domain,
+                recipient,
+                amount,
+            )
+            .map_err(|e| CliError::chain("SVM", format!("transfer_remote_native: {e}")))?;
+
+            dispatcher.output.success(format!(
+                "Bridge deposit submitted (SVM native)\n\
+                 Signature: {}\n\
+                 MessageID: 0x{}\n\
+                 MessageStoragePDA: {}\n\
+                 Amount: {} {} -> Morpheum domain {}",
+                result.signature, hex::encode(result.message_id),
+                result.message_storage_pda,
+                args.amount, args.token, args.destination_domain,
+            ));
+        }
+        SvmTokenType::Spl => {
+            let warp_route = chain.warp_route_program.ok_or_else(|| {
+                CliError::chain("SVM", format!("no warp_route_program configured for {chain_name}"))
+            })?;
+
+            dispatcher.output.info(format!(
+                "SVM bridge deposit\n\
+                 From: {from_address}\n\
+                 Chain: {chain_name} (RPC: {})\n\
+                 Token: {} (mint: {})\n\
+                 Warp Route: {warp_route}\n\
+                 Amount: {amount}\n\
+                 Destination domain: {}\n\
+                 Recipient: 0x{}",
+                chain.rpc_url, args.token, token.mint,
+                args.destination_domain, hex::encode(recipient),
+            ));
+
+            dispatcher.output.info("Calling transfer_remote...");
+            let result = morpheum_sdk_svm::bridge::transfer_remote(
+                &provider,
+                &warp_route,
+                &mailbox,
+                &token.mint,
+                args.destination_domain,
+                recipient,
+                amount,
+            )
+            .map_err(|e| CliError::chain("SVM", format!("transfer_remote: {e}")))?;
+
+            dispatcher.output.success(format!(
+                "Bridge deposit submitted (SVM)\n\
+                 Signature: {}\n\
+                 MessageID: 0x{}\n\
+                 MessageStoragePDA: {}\n\
+                 Amount: {} {} -> Morpheum domain {}",
+                result.signature, hex::encode(result.message_id),
+                result.message_storage_pda,
+                args.amount, args.token, args.destination_domain,
+            ));
+        }
+    }
 
     Ok(())
 }
 
 // ── Withdraw (Morpheum -> External) ─────────────────────────────────
 
+/// Resolves the warp route contract and destination domain for a withdrawal.
+///
+/// When `--token` + `--chain-name` are provided, looks up the Morpheum-side
+/// warp route contract and Hyperlane domain from the appropriate chain registry.
+/// Falls back to explicit `--warp-route-contract` + `--destination-domain`.
+fn resolve_withdraw_target(args: &WithdrawArgs) -> Result<(String, u32), CliError> {
+    if let Some(ref token_symbol) = args.token {
+        let chain_name = args.chain_name.as_deref().ok_or_else(|| {
+            CliError::invalid_input("--chain-name is required when --token is specified")
+        })?;
+
+        match args.chain {
+            ChainType::Evm => {
+                let registry = ChainRegistry::load_with_defaults(morpheum_sdk_evm::DEFAULT_CHAINS_TOML)
+                    .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
+                let (chain, token) = registry
+                    .resolve(chain_name, token_symbol)
+                    .map_err(|e| CliError::chain("EVM", format!("{e}")))?;
+                let warp = token.morpheum_warp_route.ok_or_else(|| {
+                    CliError::chain("EVM", format!("no morpheum_warp_route for {token_symbol} on {chain_name}"))
+                })?;
+                Ok((warp, args.destination_domain.unwrap_or(chain.hyperlane_domain)))
+            }
+            ChainType::Svm => {
+                let registry = SolanaChainRegistry::load_with_defaults(morpheum_sdk_svm::DEFAULT_CHAINS_TOML)
+                    .map_err(|e| CliError::chain("SVM", format!("chain registry: {e}")))?;
+                let (chain, token) = registry
+                    .resolve(chain_name, token_symbol)
+                    .map_err(|e| CliError::chain("SVM", format!("{e}")))?;
+                let warp = token.morpheum_warp_route.ok_or_else(|| {
+                    CliError::chain("SVM", format!("no morpheum_warp_route for {token_symbol} on {chain_name}"))
+                })?;
+                Ok((warp, args.destination_domain.unwrap_or(chain.hyperlane_domain)))
+            }
+        }
+    } else {
+        let contract = args.warp_route_contract.as_ref().ok_or_else(|| {
+            CliError::invalid_input("either --token or --warp-route-contract is required")
+        })?;
+        let domain = args.destination_domain.ok_or_else(|| {
+            CliError::invalid_input("--destination-domain is required when --warp-route-contract is used")
+        })?;
+        Ok((contract.clone(), domain))
+    }
+}
+
 #[cfg(feature = "_transport")]
 async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     use morpheum_sdk_cosmwasm::WarpRouteTransferBuilder;
+
+    let (warp_route_contract, destination_domain) = resolve_withdraw_target(&args)?;
 
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let from_address = hex::encode(signer.account_id().0);
@@ -484,8 +661,8 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 
     let request = WarpRouteTransferBuilder::new()
         .sender(&from_address)
-        .warp_route_contract(&args.warp_route_contract)
-        .destination_domain(args.destination_domain)
+        .warp_route_contract(&warp_route_contract)
+        .destination_domain(destination_domain)
         .recipient(recipient_bytes)
         .amount(&args.amount)
         .build()
@@ -501,11 +678,11 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 
     dispatcher.output.success(format!(
         "Warp Route withdrawal submitted ({chain_label})\n\
-         Contract: {}\n\
-         Destination domain: {}\n\
+         Contract: {warp_route_contract}\n\
+         Destination domain: {destination_domain}\n\
          Amount: {}\n\
          TxHash: {txhash}",
-        args.warp_route_contract, args.destination_domain, args.amount,
+        args.amount,
     ));
 
     Ok(())
