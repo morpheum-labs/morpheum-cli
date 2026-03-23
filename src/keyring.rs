@@ -88,6 +88,24 @@ impl KeyringManager {
         hex_str.len() == 64 && hex_str.chars().all(|c| c.is_ascii_hexdigit())
     }
 
+    /// Returns the Morpheum bech32 (`morm1...`) address for a stored key.
+    ///
+    /// Only works with mnemonic-based keys (not raw hex private keys).
+    pub fn morpheum_address(&self, name: &str) -> Result<String, CliError> {
+        use morpheum_signing_native::signer::Signer;
+        let native = self.get_native_signer(name)?;
+        let acct = native.account_id().0;
+        Ok(morpheum_primitives::address::encode_address(&acct[acct.len() - 20..]))
+    }
+
+    /// Returns `true` if the stored secret is a raw hex private key rather
+    /// than a BIP-39 mnemonic.
+    pub fn is_hex_key(&self, name: &str) -> bool {
+        self.load_secret(name)
+            .map(|s| Self::looks_like_hex_key(s.expose_secret().trim()))
+            .unwrap_or(false)
+    }
+
     /// Returns the EVM (0x-prefixed) address for a stored key.
     pub fn evm_address(&self, name: &str) -> Result<String, CliError> {
         use morpheum_sdk_evm::alloy::signers::Signer;

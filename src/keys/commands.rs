@@ -19,6 +19,9 @@ pub enum KeysCommands {
     /// Import a raw EVM private key (hex)
     ImportEvm(ImportEvmArgs),
 
+    /// Show derived addresses for a stored key
+    Show(ShowArgs),
+
     /// List all stored keys
     List,
 
@@ -52,6 +55,13 @@ pub struct ImportEvmArgs {
 }
 
 #[derive(Args)]
+pub struct ShowArgs {
+    /// Name of the key to display
+    #[arg(required = true)]
+    pub name: String,
+}
+
+#[derive(Args)]
 pub struct DeleteArgs {
     /// Name of the key to delete
     #[arg(required = true)]
@@ -70,6 +80,7 @@ pub async fn execute(cmd: KeysCommands, dispatcher: Dispatcher) -> Result<(), Cl
     match cmd {
         KeysCommands::Add(args) => add_key(args, &dispatcher),
         KeysCommands::ImportEvm(args) => import_evm_key(args, &dispatcher),
+        KeysCommands::Show(args) => show_key(args, &dispatcher),
         KeysCommands::List => list_keys(&dispatcher),
         KeysCommands::Delete(args) => delete_key(args, &dispatcher),
         KeysCommands::Export(args) => export_key(args, &dispatcher),
@@ -103,6 +114,31 @@ fn import_evm_key(args: ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), Cl
         .keyring
         .add_native(&args.name, &SecretString::new(normalized))?;
     output.success(format!("EVM key '{}' imported successfully", args.name));
+
+    Ok(())
+}
+
+fn show_key(args: ShowArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let keyring = &dispatcher.keyring;
+    let is_hex = keyring.is_hex_key(&args.name);
+
+    let mut info = KeyAddresses {
+        name: args.name.clone(),
+        morpheum_address: None,
+        solana_address: None,
+        evm_address: None,
+    };
+
+    if is_hex {
+        info.evm_address = Some(keyring.evm_address(&args.name)?);
+    } else {
+        info.morpheum_address = Some(keyring.morpheum_address(&args.name)?);
+        info.solana_address = Some(keyring.solana_address(&args.name)?);
+        info.evm_address = keyring.evm_address(&args.name).ok();
+    }
+
+    dispatcher.output.print_json(&info)
+        .map_err(|e| CliError::invalid_input(format!("JSON output: {e}")))?;
 
     Ok(())
 }
@@ -141,6 +177,17 @@ fn export_key(args: ExportArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
     output.success(format!("Public key for '{}' exported", args.name));
 
     Ok(())
+}
+
+#[derive(Serialize)]
+struct KeyAddresses {
+    name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    morpheum_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    solana_address: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    evm_address: Option<String>,
 }
 
 #[derive(tabled::Tabled, Serialize)]
