@@ -49,11 +49,11 @@ impl KeyringManager {
             .map_err(CliError::Signing)
     }
 
-    /// Derives an alloy `PrivateKeySigner` from the stored BIP-39 mnemonic.
+    /// Derives an alloy `PrivateKeySigner` from the stored secret.
     ///
-    /// Derivation path: `m/44'/60'/0'/0/0` (standard Ethereum). The same mnemonic
-    /// that produces the Morpheum native key also produces a deterministic EVM key,
-    /// so the user never manages two separate secrets.
+    /// Supports two formats:
+    /// - **Mnemonic** (BIP-39 words): derives via path `m/44'/60'/0'/0/0`
+    /// - **Raw hex key** (with or without `0x` prefix): used directly
     pub fn get_evm_signer(
         &self,
         name: &str,
@@ -61,13 +61,31 @@ impl KeyringManager {
         use morpheum_sdk_evm::alloy::primitives::FixedBytes;
         use morpheum_sdk_evm::alloy::signers::local::PrivateKeySigner;
 
-        let mnemonic = self.load_secret(name)?;
-        let evm = EvmSigner::from_mnemonic(mnemonic.expose_secret(), "")
-            .map_err(CliError::Signing)?;
+        let secret = self.load_secret(name)?;
+        let raw = secret.expose_secret().trim();
 
-        let key_bytes = evm.private_key_bytes();
-        PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
-            .map_err(|e| CliError::chain("EVM", format!("failed to create EVM signer: {e}")))
+        if Self::looks_like_hex_key(raw) {
+            let hex_str = raw.strip_prefix("0x").unwrap_or(raw);
+            let key_bytes: [u8; 32] = hex::decode(hex_str)
+                .map_err(|e| CliError::chain("EVM", format!("invalid hex private key: {e}")))?
+                .try_into()
+                .map_err(|v: Vec<u8>| {
+                    CliError::chain("EVM", format!("private key must be 32 bytes, got {}", v.len()))
+                })?;
+            PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
+                .map_err(|e| CliError::chain("EVM", format!("failed to create EVM signer: {e}")))
+        } else {
+            let evm = EvmSigner::from_mnemonic(raw, "")
+                .map_err(CliError::Signing)?;
+            let key_bytes = evm.private_key_bytes();
+            PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
+                .map_err(|e| CliError::chain("EVM", format!("failed to create EVM signer: {e}")))
+        }
+    }
+
+    fn looks_like_hex_key(s: &str) -> bool {
+        let hex_str = s.strip_prefix("0x").unwrap_or(s);
+        hex_str.len() == 64 && hex_str.chars().all(|c| c.is_ascii_hexdigit())
     }
 
     /// Returns the EVM (0x-prefixed) address for a stored key.

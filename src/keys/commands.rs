@@ -16,6 +16,9 @@ pub enum KeysCommands {
     /// Add a new native wallet key from a BIP-39 mnemonic
     Add(AddArgs),
 
+    /// Import a raw EVM private key (hex)
+    ImportEvm(ImportEvmArgs),
+
     /// List all stored keys
     List,
 
@@ -38,6 +41,17 @@ pub struct AddArgs {
 }
 
 #[derive(Args)]
+pub struct ImportEvmArgs {
+    /// Unique name for the key
+    #[arg(required = true)]
+    pub name: String,
+
+    /// Raw EVM private key (hex, with or without 0x prefix)
+    #[arg(long, required = true)]
+    pub private_key: String,
+}
+
+#[derive(Args)]
 pub struct DeleteArgs {
     /// Name of the key to delete
     #[arg(required = true)]
@@ -55,6 +69,7 @@ pub struct ExportArgs {
 pub async fn execute(cmd: KeysCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         KeysCommands::Add(args) => add_key(args, &dispatcher),
+        KeysCommands::ImportEvm(args) => import_evm_key(args, &dispatcher),
         KeysCommands::List => list_keys(&dispatcher),
         KeysCommands::Delete(args) => delete_key(args, &dispatcher),
         KeysCommands::Export(args) => export_key(args, &dispatcher),
@@ -69,6 +84,25 @@ fn add_key(args: AddArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .keyring
         .add_native(&args.name, &SecretString::new(args.mnemonic))?;
     output.success(format!("Key '{}' added successfully", args.name));
+
+    Ok(())
+}
+
+fn import_evm_key(args: ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let output = &dispatcher.output;
+
+    let hex_str = args.private_key.strip_prefix("0x").unwrap_or(&args.private_key);
+    if hex_str.len() != 64 || !hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err(CliError::invalid_input(
+            "private key must be 32 bytes (64 hex characters)",
+        ));
+    }
+
+    let normalized = format!("0x{hex_str}");
+    dispatcher
+        .keyring
+        .add_native(&args.name, &SecretString::new(normalized))?;
+    output.success(format!("EVM key '{}' imported successfully", args.name));
 
     Ok(())
 }

@@ -44,7 +44,8 @@ pub struct GlobalArgs {
 /// On-chain modules live under `tx` and `query` (14 modules each, 1:1 with Mormcore).
 /// Protocol gateways and developer tools are top-level (`mwvm`, `mcp`, `a2a`, `keys`).
 ///
-/// Cross-chain operations use `tx interop` / `query interop` directly.
+/// Cross-chain deposit/withdraw lives under `tx bank deposit` / `tx bank withdraw`.
+/// Message delivery status: `query gmp delivery`.
 /// Full agent registration uses `tx identity register --full`.
 #[derive(Subcommand)]
 pub enum Commands {
@@ -55,10 +56,6 @@ pub enum Commands {
     /// On-chain query commands (mirrors `tx/`)
     #[command(subcommand)]
     Query(crate::query::QueryCommands),
-
-    /// Cross-chain bridge (deposit, withdraw, status) via Hyperlane Warp Routes
-    #[command(subcommand)]
-    Bridge(crate::bridge::BridgeCommands),
 
     /// mwvm — Local simulation, debugging, orchestration and developer runtime (Pillar 1)
     #[command(subcommand)]

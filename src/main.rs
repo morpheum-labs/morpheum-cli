@@ -12,7 +12,7 @@ mod query;
 #[cfg(feature = "_transport")]
 mod transport;
 mod utils;
-mod bridge;
+mod xchain;
 mod mwvm;
 mod mcp;
 mod a2a;

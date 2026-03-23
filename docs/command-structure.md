@@ -6,9 +6,13 @@
   → Always under **`tx`** and **`query`**  
   These are low-level, precise operations that touch the blockchain directly.
 
-- **Protocol & Developer Experience layers** (MCP, A2A, mwvm simulation, Bridge/GMP gateways)  
+- **Protocol & Developer Experience layers** (MCP, A2A, mwvm simulation)  
   → Top-level commands (no `tx`/`query` prefix)  
   These are high-level, user-friendly interfaces that often combine multiple steps or talk to gateways.
+
+- **Cross-chain operations** (deposits, withdrawals via Hyperlane Warp Routes)  
+  → Under `tx bank` and `query gmp`  
+  Cross-chain is a capability applied to modules, not a separate top-level concept.
 
 - **High-level agent operations**  
   → Top-level (`agent register --full`, `agent interact`, etc.)
@@ -47,9 +51,16 @@ morpheum tx x402 pay did:agent:alpha-trader 2500000 --memo "data subscription"
 morpheum query job status <job-id>
 ```
 
+**Cross-chain (under bank module)**:
+```bash
+morpheum tx bank deposit --chain evm:sepolia --token USDC --amount 100
+morpheum tx bank deposit --chain svm:devnet --token SOL --amount 0.5
+morpheum tx bank withdraw --chain evm:sepolia --token ETH --recipient 0x... --amount 10000000000000
+morpheum query gmp delivery --message-id 0xabc123...
+```
+
 **Protocol layers (no prefix)**:
 ```bash
-morpheum bridge send-proof --agent did:agent:trader --to-chain ethereum
 morpheum mcp call did:agent:data-provider --tool search
 morpheum a2a delegate did:agent:alpha-trader --task "analyze market"
 morpheum mwvm infer --model llama-3.1 --prompt "Hello"

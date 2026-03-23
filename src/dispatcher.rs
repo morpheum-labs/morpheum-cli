@@ -26,7 +26,6 @@ impl Dispatcher {
         match cmd {
             Commands::Tx(sub) => crate::tx::execute(sub, self).await,
             Commands::Query(sub) => crate::query::execute(sub, self).await,
-            Commands::Bridge(sub) => crate::bridge::execute(sub, self).await,
             Commands::Mwvm(sub) => crate::mwvm::execute(sub, self).await,
             Commands::Mcp(sub) => crate::mcp::execute(sub, self).await,
             Commands::A2a(sub) => crate::a2a::execute(sub, self).await,

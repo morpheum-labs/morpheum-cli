@@ -20,7 +20,8 @@ This split gives developers both raw power and delightful UX.
 | mwvm              | Top-level   | Local simulation & developer tools (Pillar 1) | `morpheum mwvm infer` |
 | mcp               | Top-level   | Model Context Protocol tools (Pillar 2) | `morpheum mcp call` |
 | a2a               | Top-level   | Agent-to-Agent collaboration (Pillar 2) | `morpheum a2a delegate` |
-| bridge            | Top-level   | Cross-chain GMP bridges (Pillar 4) | `morpheum bridge send-proof` |
+| bank (xchain)     | `tx bank`   | Cross-chain deposits/withdrawals via Hyperlane | `morpheum tx bank deposit --chain evm:sepolia` |
+| gmp               | `query gmp` | Hyperlane message delivery status | `morpheum query gmp delivery` |
 | agent             | Top-level   | Unified agent lifecycle (Pillar 2+3) | `morpheum agent register --full` |
 | keys              | Top-level   | Secure key management | `morpheum keys add` |
 | x402              | `tx x402`   | Native autonomous payments (Pillar 2) | `morpheum tx x402 pay` (also automatic) |
@@ -102,27 +103,61 @@ morpheum a2a collaborate did:agent:research-bot --goal "market analysis"
 
 ---
 
-### 4. `bridge` – Cross-Chain GMP Bridges (Pillar 4)
+### 4. `tx bank deposit/withdraw` – Cross-Chain Token Transfers (Pillar 4)
 
 **Purpose**:  
-Sends proofs, intents, and reputation updates to other chains (Ethereum, Solana, etc.) via GMP.
+Transfers tokens between external chains (Ethereum, Solana, etc.) and Morpheum via Hyperlane Warp Routes. Cross-chain is a capability applied to modules, not a separate top-level concept.
 
 **Primary Use Cases**:
-- Exporting validation proofs to Ethereum ERC-8004 agents
-- Making Morpheum agents callable from other chains
-- Cross-chain reputation sync
+- Depositing USDC, ETH, SOL from external chains into Morpheum bank accounts
+- Withdrawing assets from Morpheum back to external chains
+- Funding margin accounts for perpetual trading
 
 **How to Use**:
 ```bash
-morpheum bridge send-proof --agent did:agent:trader --to-chain ethereum
-morpheum bridge export-intent --agent did:agent:alpha --to-chain base
-morpheum bridge status
+# Deposit USDC from Ethereum Sepolia to Morpheum
+morpheum tx bank deposit --chain evm:sepolia --token USDC --amount 100
+
+# Deposit native SOL from Solana Devnet to Morpheum
+morpheum tx bank deposit --chain svm:devnet --token SOL --amount 0.5
+
+# Withdraw ETH from Morpheum to Ethereum Sepolia
+morpheum tx bank withdraw --chain evm:sepolia --token ETH --recipient 0x... --amount 10000000000000
+
+# Check delivery status of a Hyperlane message
+morpheum query gmp delivery --message-id 0xabc123...
 ```
 
-**Internal Flow**:
-1. CLI calls interop hotpath to generate proof/packet
-2. Routes via GMP adapter (LayerZero/Axelar)
-3. Returns transaction hash on target chain
+**Supported Chains and Tokens**:
+
+| Chain              | Spec          | Tokens        |
+|--------------------|---------------|---------------|
+| Ethereum Sepolia   | `evm:sepolia` | USDC, ETH     |
+| Base Sepolia       | `evm:base-sepolia` | USDC     |
+| Polygon Amoy       | `evm:polygon-amoy` | USDC     |
+| Arbitrum Sepolia   | `evm:arbitrum-sepolia` | USDC  |
+| Solana Devnet      | `svm:devnet`  | USDC, SOL     |
+
+**Key Flags**:
+- `--chain`: Chain specification in `<type>:<network>` format
+- `--token`: Token symbol (USDC, ETH, SOL)
+- `--amount`: Human-readable amount for deposits, raw amount for withdrawals
+- `--recipient`: 32-byte hex recipient address
+- `--chain-rpc`: Override the external chain's RPC URL
+- `--from`: Key name to sign with (default: "default")
+
+**Internal Flow (Deposit)**:
+1. CLI resolves chain + token from SDK chain registry
+2. Derives signer from keyring (mnemonic or raw private key)
+3. Calls `quoteDispatch` for Hyperlane fee (ERC-20 only)
+4. Calls `transferRemote` on the Warp Route contract
+5. Returns transaction hash and Hyperlane message ID
+
+**Internal Flow (Withdraw)**:
+1. CLI resolves warp route contract from SDK registry
+2. Builds CosmWasm `transfer_remote` execute message
+3. Signs and broadcasts via Morpheum gRPC
+4. Returns transaction hash
 
 ---
 

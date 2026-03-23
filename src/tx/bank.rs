@@ -2,25 +2,28 @@ use clap::{Args, Subcommand};
 
 use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::bank::{
-    TransferBuilder, CrossChainTransferBuilder, TransferToBucketBuilder,
-    MintBuilder, OnboardAssetBuilder, WithdrawBuilder,
+    TransferBuilder, TransferToBucketBuilder,
+    MintBuilder, OnboardAssetBuilder,
 };
-use morpheum_sdk_native::bank::types::{AssetIdentifier, ChainType};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use crate::xchain::{ChainSpec, ChainType, CrossChainExecutor, resolve_warp_target};
 
 /// Transaction commands for the `bank` module.
 ///
-/// Covers native transfers, cross-chain transfers, bucket margin deposits,
-/// minting, asset onboarding, and withdrawals.
+/// Covers local transfers, cross-chain deposits/withdrawals via Hyperlane
+/// Warp Routes, bucket margin deposits, minting, and asset onboarding.
 #[derive(Subcommand)]
 pub enum BankCommands {
-    /// Transfer native assets between accounts
+    /// Transfer native assets between accounts on Morpheum
     Send(SendArgs),
 
-    /// Transfer assets cross-chain (Ethereum, Solana, Bitcoin)
-    CrossChainSend(CrossChainSendArgs),
+    /// Deposit tokens from an external chain (EVM/SVM) to Morpheum via Hyperlane
+    Deposit(DepositArgs),
+
+    /// Withdraw tokens from Morpheum to an external chain via Hyperlane Warp Route
+    Withdraw(WithdrawArgs),
 
     /// Transfer assets into a perpetuals margin bucket
     TransferToBucket(TransferToBucketArgs),
@@ -30,10 +33,9 @@ pub enum BankCommands {
 
     /// Onboard a new asset type to the chain
     OnboardAsset(OnboardAssetArgs),
-
-    /// Withdraw assets to an external chain
-    Withdraw(WithdrawArgs),
 }
+
+// ── Send (local) ────────────────────────────────────────────────────
 
 #[derive(Args)]
 pub struct SendArgs {
@@ -56,30 +58,73 @@ pub struct SendArgs {
     pub memo: Option<String>,
 }
 
+// ── Deposit (external chain -> Morpheum) ────────────────────────────
+
 #[derive(Args)]
-pub struct CrossChainSendArgs {
-    /// Target chain (ethereum, solana, bitcoin)
-    #[arg(long, value_parser = parse_chain_type)]
-    pub target_chain: ChainType,
+pub struct DepositArgs {
+    /// External chain (format: "evm:sepolia", "svm:devnet")
+    #[arg(long)]
+    pub chain: String,
 
-    /// Destination address on the target chain
-    pub to: String,
+    /// Token symbol (e.g. "USDC", "ETH", "SOL")
+    #[arg(long)]
+    pub token: String,
 
-    /// Amount to send
+    /// Amount (human-readable, e.g. "100" or "0.05")
+    #[arg(long)]
     pub amount: String,
 
-    /// Asset identifier — index or symbol (e.g. "0" or "MORM")
+    /// 32-byte hex recipient address on Morpheum (defaults to sender's address)
     #[arg(long)]
-    pub asset: String,
+    pub recipient: Option<String>,
+
+    /// Morpheum Hyperlane domain ID
+    #[arg(long, default_value_t = morpheum_primitives::constants::hyperlane::MORPHEUM_DOMAIN)]
+    pub destination_domain: u32,
+
+    /// Override the external chain's RPC URL (instead of the SDK registry default)
+    #[arg(long)]
+    pub chain_rpc: Option<String>,
 
     /// Key name to sign with
     #[arg(long, default_value = "default")]
     pub from: String,
-
-    /// Optional memo
-    #[arg(long)]
-    pub memo: Option<String>,
 }
+
+// ── Withdraw (Morpheum -> external chain) ───────────────────────────
+
+#[derive(Args)]
+pub struct WithdrawArgs {
+    /// External chain (format: "evm:sepolia", "svm:devnet")
+    #[arg(long)]
+    pub chain: String,
+
+    /// Token symbol (e.g. "USDC", "ETH", "SOL")
+    #[arg(long)]
+    pub token: String,
+
+    /// Amount (human-readable, e.g. "100" or "0.05")
+    #[arg(long)]
+    pub amount: String,
+
+    /// Recipient address on the destination chain (hex)
+    #[arg(long)]
+    pub recipient: String,
+
+    /// Explicit warp route contract (overrides registry lookup)
+    #[arg(long)]
+    pub warp_route_contract: Option<String>,
+
+    /// Explicit destination domain (overrides registry lookup)
+    #[arg(long)]
+    pub destination_domain: Option<u32>,
+
+    /// Key name to sign with
+    #[arg(long, default_value = "default")]
+    pub from: String,
+}
+
+// ── TransferToBucket ────────────────────────────────────────────────
 
 #[derive(Args)]
 pub struct TransferToBucketArgs {
@@ -98,6 +143,8 @@ pub struct TransferToBucketArgs {
     #[arg(long, default_value = "default")]
     pub from: String,
 }
+
+// ── Mint ────────────────────────────────────────────────────────────
 
 #[derive(Args)]
 pub struct MintArgs {
@@ -119,6 +166,8 @@ pub struct MintArgs {
     #[arg(long, default_value = "default")]
     pub from: String,
 }
+
+// ── OnboardAsset ────────────────────────────────────────────────────
 
 #[derive(Args)]
 pub struct OnboardAssetArgs {
@@ -143,41 +192,24 @@ pub struct OnboardAssetArgs {
     pub from: String,
 }
 
-#[derive(Args)]
-pub struct WithdrawArgs {
-    /// Destination chain (ethereum, solana, bitcoin)
-    #[arg(long, value_parser = parse_chain_type)]
-    pub destination_chain: ChainType,
-
-    /// Destination address on the external chain
-    pub destination_address: String,
-
-    /// Amount to withdraw
-    pub amount: String,
-
-    /// Asset identifier — index or symbol
-    #[arg(long)]
-    pub asset: String,
-
-    /// Use fast withdrawal (higher fee, instant finality)
-    #[arg(long)]
-    pub fast: bool,
-
-    /// Key name to sign with
-    #[arg(long, default_value = "default")]
-    pub from: String,
-}
+// ── Execute ─────────────────────────────────────────────────────────
 
 pub async fn execute(cmd: BankCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         BankCommands::Send(args) => send(args, &dispatcher).await,
-        BankCommands::CrossChainSend(args) => cross_chain_send(args, &dispatcher).await,
-        BankCommands::TransferToBucket(args) => transfer_to_bucket(args, &dispatcher).await,
-        BankCommands::Mint(args) => mint(args, &dispatcher).await,
-        BankCommands::OnboardAsset(args) => onboard_asset(args, &dispatcher).await,
+        BankCommands::Deposit(args) => deposit(args, &dispatcher).await,
         BankCommands::Withdraw(args) => withdraw(args, &dispatcher).await,
+        BankCommands::TransferToBucket(args) => {
+            transfer_to_bucket(args, &dispatcher).await
+        }
+        BankCommands::Mint(args) => mint(args, &dispatcher).await,
+        BankCommands::OnboardAsset(args) => {
+            onboard_asset(args, &dispatcher).await
+        }
     }
 }
+
+// ── Send ────────────────────────────────────────────────────────────
 
 async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
@@ -193,7 +225,10 @@ async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
+        signer,
+        dispatcher,
+        request.to_any(),
+        None,
     )
     .await?;
 
@@ -205,37 +240,156 @@ async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     Ok(())
 }
 
-async fn cross_chain_send(
-    args: CrossChainSendArgs,
+// ── Deposit (external -> Morpheum) ──────────────────────────────────
+
+async fn deposit(
+    args: DepositArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
+    let spec = ChainSpec::parse(&args.chain)?;
+    let executor = CrossChainExecutor::from_dispatcher(dispatcher);
+
+    match spec.chain_type {
+        ChainType::Evm => {
+            let result = executor
+                .deposit_evm(
+                    &spec.network,
+                    &args.token,
+                    &args.amount,
+                    args.recipient.as_deref(),
+                    &args.from,
+                    args.destination_domain,
+                    args.chain_rpc.as_deref(),
+                )
+                .await?;
+
+            dispatcher.output.success(format!(
+                "Deposit submitted (EVM)\n\
+                 TxHash: {}\n\
+                 MessageID: {}\n\
+                 Amount: {} {} -> Morpheum domain {}",
+                result.tx_hash,
+                result.message_id,
+                result.amount_display,
+                result.token,
+                result.destination_domain,
+            ));
+        }
+        ChainType::Svm => {
+            let result = executor.deposit_svm(
+                &spec.network,
+                &args.token,
+                &args.amount,
+                args.recipient.as_deref(),
+                &args.from,
+                args.destination_domain,
+                args.chain_rpc.as_deref(),
+            )?;
+
+            dispatcher.output.success(format!(
+                "Deposit submitted (SVM)\n\
+                 Signature: {}\n\
+                 MessageID: 0x{}\n\
+                 MessageStoragePDA: {}\n\
+                 Amount: {} {} -> Morpheum domain {}",
+                result.signature,
+                result.message_id,
+                result.message_storage_pda,
+                result.amount_display,
+                result.token,
+                result.destination_domain,
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+// ── Withdraw (Morpheum -> external) ─────────────────────────────────
+
+#[cfg(feature = "_transport")]
+async fn withdraw(
+    args: WithdrawArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    use morpheum_sdk_cosmwasm::WarpRouteTransferBuilder;
+
+    let spec = ChainSpec::parse(&args.chain)?;
+
+    let (warp_route_contract, destination_domain) =
+        if let Some(ref explicit_contract) = args.warp_route_contract {
+            let domain = args.destination_domain.ok_or_else(|| {
+                CliError::invalid_input(
+                    "--destination-domain is required when \
+                     --warp-route-contract is used",
+                )
+            })?;
+            (explicit_contract.clone(), domain)
+        } else {
+            resolve_warp_target(
+                &spec.chain_type,
+                &spec.network,
+                &args.token,
+                args.destination_domain,
+            )?
+        };
+
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = hex::encode(signer.account_id().0);
+    let acct = signer.account_id().0;
+    let from_address = morpheum_primitives::address::encode_address(&acct[acct.len() - 20..]);
 
-    let asset = parse_asset_identifier(&args.asset);
+    let recipient_bytes = {
+        let s = args
+            .recipient
+            .strip_prefix("0x")
+            .unwrap_or(&args.recipient);
+        hex::decode(s).map_err(|e| {
+            CliError::invalid_input(format!("invalid recipient hex: {e}"))
+        })?
+    };
 
-    let request = CrossChainTransferBuilder::new()
-        .from_address(&from_address)
-        .target_chain(args.target_chain)
-        .to_address(&args.to)
+    let chain_label = spec.chain_type.label();
+
+    let request = WarpRouteTransferBuilder::new()
+        .sender(&from_address)
+        .warp_route_contract(&warp_route_contract)
+        .destination_domain(destination_domain)
+        .recipient(recipient_bytes)
         .amount(&args.amount)
-        .asset(asset)
-        .memo(args.memo.as_deref().unwrap_or_default())
         .build()
         .map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
+        signer,
+        dispatcher,
+        request.to_any(),
+        None,
     )
     .await?;
 
     dispatcher.output.success(format!(
-        "Cross-chain transfer initiated\nTo: {} on {:?}\nAmount: {}\nTxHash: {}",
-        args.to, args.target_chain, args.amount, txhash,
+        "Withdrawal submitted ({chain_label})\n\
+         Contract: {warp_route_contract}\n\
+         Destination domain: {destination_domain}\n\
+         Amount: {}\n\
+         TxHash: {txhash}",
+        args.amount,
     ));
 
     Ok(())
 }
+
+#[cfg(not(feature = "_transport"))]
+async fn withdraw(
+    _args: WithdrawArgs,
+    _dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    Err(CliError::invalid_input(
+        "withdraw requires transport support -- enable the bank feature",
+    ))
+}
+
+// ── TransferToBucket ────────────────────────────────────────────────
 
 async fn transfer_to_bucket(
     args: TransferToBucketArgs,
@@ -253,7 +407,10 @@ async fn transfer_to_bucket(
         .map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
+        signer,
+        dispatcher,
+        request.to_any(),
+        None,
     )
     .await?;
 
@@ -265,7 +422,12 @@ async fn transfer_to_bucket(
     Ok(())
 }
 
-async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+// ── Mint ────────────────────────────────────────────────────────────
+
+async fn mint(
+    args: MintArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
 
     let mut builder = MintBuilder::new()
@@ -280,7 +442,10 @@ async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let request = builder.build().map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
+        signer,
+        dispatcher,
+        request.to_any(),
+        None,
     )
     .await?;
 
@@ -292,7 +457,12 @@ async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     Ok(())
 }
 
-async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+// ── OnboardAsset ────────────────────────────────────────────────────
+
+async fn onboard_asset(
+    args: OnboardAssetArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let from_address = hex::encode(signer.account_id().0);
 
@@ -306,7 +476,10 @@ async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Resul
         .map_err(CliError::Sdk)?;
 
     let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
+        signer,
+        dispatcher,
+        request.to_any(),
+        None,
     )
     .await?;
 
@@ -316,55 +489,4 @@ async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Resul
     ));
 
     Ok(())
-}
-
-async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = hex::encode(signer.account_id().0);
-
-    let asset = parse_asset_identifier(&args.asset);
-
-    let request = WithdrawBuilder::new()
-        .from_address(&from_address)
-        .asset(asset)
-        .amount(&args.amount)
-        .destination_chain(args.destination_chain)
-        .destination_address(&args.destination_address)
-        .fast_withdrawal(args.fast)
-        .build()
-        .map_err(CliError::Sdk)?;
-
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
-    )
-    .await?;
-
-    dispatcher.output.success(format!(
-        "Withdrawal initiated to {} on {:?}\nAmount: {}{}\nTxHash: {}",
-        args.destination_address,
-        args.destination_chain,
-        args.amount,
-        if args.fast { " (fast)" } else { "" },
-        txhash,
-    ));
-
-    Ok(())
-}
-
-fn parse_chain_type(s: &str) -> Result<ChainType, String> {
-    match s.to_lowercase().as_str() {
-        "ethereum" | "eth" => Ok(ChainType::Ethereum),
-        "solana" | "sol" => Ok(ChainType::Solana),
-        "bitcoin" | "btc" => Ok(ChainType::Bitcoin),
-        other => Err(format!(
-            "unknown chain '{other}'; expected: ethereum, solana, bitcoin"
-        )),
-    }
-}
-
-fn parse_asset_identifier(s: &str) -> AssetIdentifier {
-    match s.parse::<u64>() {
-        Ok(idx) => AssetIdentifier::index(idx),
-        Err(_) => AssetIdentifier::symbol(s),
-    }
 }
