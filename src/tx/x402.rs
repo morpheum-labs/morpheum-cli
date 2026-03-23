@@ -454,7 +454,7 @@ async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
     let mut keypair_bytes = [0u8; 64];
     keypair_bytes[..32].copy_from_slice(&solana_signer.private_key_bytes());
     keypair_bytes[32..].copy_from_slice(&solana_signer.public_key_bytes());
-    let keypair = Keypair::from_bytes(&keypair_bytes)
+    let keypair = Keypair::try_from(keypair_bytes.as_slice())
         .map_err(|e| CliError::chain("SVM", format!("keypair: {e}")))?;
 
     let provider = morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)

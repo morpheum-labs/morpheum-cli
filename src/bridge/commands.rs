@@ -408,6 +408,10 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
         CliError::chain("SVM", format!("no warp_route_program configured for {chain_name}"))
     })?;
 
+    let mailbox = chain.hyperlane_mailbox_program.ok_or_else(|| {
+        CliError::chain("SVM", format!("no hyperlane_mailbox_program configured for {chain_name}"))
+    })?;
+
     let solana_signer = dispatcher.keyring.get_solana_signer(&args.from)?;
     let from_address = bs58::encode(solana_signer.public_key_bytes()).into_string();
     let recipient = resolve_recipient(&args.recipient, &args.from, &dispatcher.keyring, false)?;
@@ -431,7 +435,7 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
     let mut keypair_bytes = [0u8; 64];
     keypair_bytes[..32].copy_from_slice(&solana_signer.private_key_bytes());
     keypair_bytes[32..].copy_from_slice(&solana_signer.public_key_bytes());
-    let keypair = Keypair::from_bytes(&keypair_bytes)
+    let keypair = Keypair::try_from(keypair_bytes.as_slice())
         .map_err(|e| CliError::chain("SVM", format!("keypair: {e}")))?;
 
     let provider = morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)
@@ -441,6 +445,7 @@ async fn deposit_svm(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), C
     let result = morpheum_sdk_svm::bridge::transfer_remote(
         &provider,
         &warp_route,
+        &mailbox,
         &token.mint,
         args.destination_domain,
         recipient,
