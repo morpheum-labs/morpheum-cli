@@ -53,13 +53,42 @@ morpheum tx bank withdraw --chain svm:devnet --token SOL \
 morpheum query gmp delivery --message-id 0xabc123...
 ```
 
+## Registry Queries
+
+Discover supported chains, tokens, and actions without hard-coded tables.
+Data is read directly from the SDK chain registries at runtime, so it
+is always accurate and requires zero manual maintenance.
+
+```bash
+# List all supported external chains
+morpheum query registry chains
+
+# List tokens for a specific chain (with available actions)
+morpheum query registry tokens --chain evm:sepolia
+
+# Find all chains that support a given token
+morpheum query registry routes --token USDC
+```
+
+## Bank Asset Registry
+
+Query the on-chain asset registry managed by the bank module.
+
+```bash
+# List all registered assets (index, symbol, type, metadata)
+morpheum query bank assets
+
+# Filter by asset type (e.g. 7 = CANONICAL_STABLECOIN)
+morpheum query bank assets --type-filter 7
+```
+
 ## Architecture
 
 The CLI follows a layered design:
 
-- **`morpheum-cli`** — Thin command dispatcher; no business logic
-- **`morpheum-sdk`** — All heavy logic (chain registries, signing, transaction building)
-- **`morpheum-signing`** — BIP-39 key derivation for Native, EVM, and Solana
+- **`morpheum-cli`** -- Thin command dispatcher; no business logic
+- **`morpheum-sdk`** -- All heavy logic (chain registries, signing, transaction building)
+- **`morpheum-signing`** -- BIP-39 key derivation for Native, EVM, and Solana
 
 Cross-chain capabilities are a composable trait applied to modules, not a
 separate top-level concept. The `xchain` module provides `CrossChainExecutor`
@@ -71,13 +100,3 @@ deposit/withdraw.
 | Feature | Description |
 |---------|-------------|
 | `bank`  | Enables cross-chain deposit/withdraw via Hyperlane |
-
-## Supported Chains
-
-| Chain            | Spec                   | Tokens    |
-|------------------|------------------------|-----------|
-| Ethereum Sepolia | `evm:sepolia`          | USDC, ETH |
-| Base Sepolia     | `evm:base-sepolia`     | USDC      |
-| Polygon Amoy     | `evm:polygon-amoy`     | USDC      |
-| Arbitrum Sepolia  | `evm:arbitrum-sepolia` | USDC      |
-| Solana Devnet    | `svm:devnet`           | USDC, SOL |

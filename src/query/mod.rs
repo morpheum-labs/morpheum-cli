@@ -3,6 +3,8 @@ use clap::Subcommand;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
+pub mod registry;
+
 #[cfg(feature = "identity")]
 pub mod identity;
 #[cfg(feature = "bank")]
@@ -47,6 +49,10 @@ pub mod svm_usdc;
 /// Symmetric counterpart to `TxCommands`, individually gated per module.
 #[derive(Subcommand)]
 pub enum QueryCommands {
+    /// Query the SDK chain/token registries (supported chains, tokens, routes)
+    #[command(subcommand)]
+    Registry(registry::RegistryQueryCommands),
+
     #[cfg(feature = "identity")]
     #[command(subcommand)]
     Identity(identity::IdentityQueryCommands),
@@ -130,6 +136,7 @@ pub enum QueryCommands {
 #[allow(clippy::unused_async, unused_variables)]
 pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
+        QueryCommands::Registry(sub) => registry::execute(sub, dispatcher).await,
         #[cfg(feature = "identity")]
         QueryCommands::Identity(sub) => identity::execute(sub, dispatcher).await,
         #[cfg(feature = "bank")]

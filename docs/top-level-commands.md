@@ -128,15 +128,14 @@ morpheum tx bank withdraw --chain evm:sepolia --token ETH --recipient 0x... --am
 morpheum query gmp delivery --message-id 0xabc123...
 ```
 
-**Supported Chains and Tokens**:
+**Discover Supported Chains and Tokens**:
 
-| Chain              | Spec          | Tokens        |
-|--------------------|---------------|---------------|
-| Ethereum Sepolia   | `evm:sepolia` | USDC, ETH     |
-| Base Sepolia       | `evm:base-sepolia` | USDC     |
-| Polygon Amoy       | `evm:polygon-amoy` | USDC     |
-| Arbitrum Sepolia   | `evm:arbitrum-sepolia` | USDC  |
-| Solana Devnet      | `svm:devnet`  | USDC, SOL     |
+```bash
+morpheum query registry chains          # List all chains
+morpheum query registry tokens --chain evm:sepolia  # Tokens for a chain
+morpheum query registry routes --token USDC         # All chains for a token
+morpheum query bank assets              # On-chain asset registry
+```
 
 **Key Flags**:
 - `--chain`: Chain specification in `<type>:<network>` format

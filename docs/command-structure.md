@@ -59,6 +59,15 @@ morpheum tx bank withdraw --chain evm:sepolia --token ETH --recipient 0x... --am
 morpheum query gmp delivery --message-id 0xabc123...
 ```
 
+**Registry & asset discovery (always available, no feature gate)**:
+```bash
+morpheum query registry chains
+morpheum query registry tokens --chain evm:sepolia
+morpheum query registry routes --token USDC
+morpheum query bank assets
+morpheum query bank assets --type-filter 7
+```
+
 **Protocol layers (no prefix)**:
 ```bash
 morpheum mcp call did:agent:data-provider --tool search
