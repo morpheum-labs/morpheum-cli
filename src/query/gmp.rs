@@ -32,33 +32,27 @@ pub async fn execute(cmd: GmpQueryCommands, dispatcher: Dispatcher) -> Result<()
 }
 
 async fn params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::gmp::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::gmp::v1::QueryParamsRequest {},
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::gmp::GmpClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn protocols(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::gmp::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_protocols(tonic::Request::new(
-            morpheum_proto::gmp::v1::QueryProtocolsRequest {},
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryProtocols failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::gmp::GmpClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_protocols().await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -67,22 +61,17 @@ async fn delivery(args: DeliveryArgs, dispatcher: &Dispatcher) -> Result<(), Cli
     let message_id = args
         .message_id
         .strip_prefix("0x")
-        .unwrap_or(&args.message_id);
+        .unwrap_or(&args.message_id)
+        .to_string();
 
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::gmp::v1::query_client::QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::gmp::GmpClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_hyperlane_delivery(&message_id).await?;
 
-    let response = client
-        .query_hyperlane_delivery(tonic::Request::new(
-            morpheum_proto::gmp::v1::QueryHyperlaneDeliveryRequest {
-                message_id: message_id.to_string(),
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("Hyperlane delivery query failed: {e}")))?
-        .into_inner();
-
-    let status = if response.delivered {
+    let status = if result.delivered {
         "Delivered"
     } else {
         "Pending (not yet delivered)"

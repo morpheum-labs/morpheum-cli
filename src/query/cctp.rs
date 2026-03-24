@@ -69,67 +69,19 @@ pub async fn execute(cmd: CctpQueryCommands, dispatcher: Dispatcher) -> Result<(
     }
 }
 
-// Re-use the same CosmWasm smart-query gRPC wire types and helper from the
-// cosmwasm module — kept local to avoid cross-module coupling.
-
-#[derive(Clone, prost::Message)]
-struct QuerySmartContractStateRequest {
-    #[prost(string, tag = "1")]
-    address: String,
-    #[prost(bytes = "vec", tag = "2")]
-    query_data: Vec<u8>,
-}
-
-#[derive(Clone, prost::Message)]
-struct QuerySmartContractStateResponse {
-    #[prost(bytes = "vec", tag = "1")]
-    data: Vec<u8>,
-}
-
-async fn smart_query<R: serde::de::DeserializeOwned>(
-    dispatcher: &Dispatcher,
-    contract: &str,
-    query_msg: &morpheum_sdk_cctp::QueryMsg,
-) -> Result<R, CliError> {
-    let query_data = serde_json::to_vec(query_msg)
-        .map_err(|e| CliError::internal(format!("CCTP query serialization: {e}")))?;
-
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-
-    let mut grpc = tonic::client::Grpc::new(channel);
-    grpc.ready()
-        .await
-        .map_err(|e| CliError::Transport(format!("service not ready: {e}")))?;
-
-    let path = "/cosmwasm.wasm.v1.Query/SmartContractState"
-        .parse::<http::uri::PathAndQuery>()
-        .map_err(|e| CliError::internal(format!("invalid gRPC path: {e}")))?;
-
-    let codec: tonic_prost::ProstCodec<
-        QuerySmartContractStateRequest,
-        QuerySmartContractStateResponse,
-    > = tonic_prost::ProstCodec::default();
-
-    let response: QuerySmartContractStateResponse = grpc
-        .unary(
-            tonic::Request::new(QuerySmartContractStateRequest {
-                address: contract.to_string(),
-                query_data,
-            }),
-            path,
-            codec,
-        )
-        .await
-        .map(tonic::Response::into_inner)
-        .map_err(|e| CliError::Transport(format!("CCTP query failed: {e}")))?;
-
-    serde_json::from_slice(&response.data)
-        .map_err(|e| CliError::internal(format!("CCTP response deserialization: {e}")))
+async fn cctp_client(dispatcher: &Dispatcher) -> Result<morpheum_sdk_cosmwasm::CosmWasmClient, CliError> {
+    let transport = dispatcher.grpc_transport().await?;
+    Ok(morpheum_sdk_cosmwasm::CosmWasmClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    ))
 }
 
 async fn config(args: CctpConfigArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let resp: morpheum_sdk_cctp::ConfigResponse =
-        smart_query(dispatcher, &args.contract, &morpheum_sdk_cctp::QueryMsg::Config {}).await?;
+    let client = cctp_client(dispatcher).await?;
+    let resp = morpheum_sdk_cctp::query_config(&client, &args.contract)
+        .await
+        .map_err(|e| CliError::Sdk(e.into()))?;
 
     let json = serde_json::to_string_pretty(&resp)
         .unwrap_or_else(|_| format!("{resp:?}"));
@@ -138,18 +90,16 @@ async fn config(args: CctpConfigArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 }
 
 async fn pending(args: CctpPendingArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let resp: morpheum_sdk_cctp::PendingTransfersResponse = smart_query(
-        dispatcher,
-        &args.contract,
-        &morpheum_sdk_cctp::QueryMsg::PendingTransfers {},
-    )
-    .await?;
+    let client = cctp_client(dispatcher).await?;
+    let transfers = morpheum_sdk_cctp::query_pending_transfers(&client, &args.contract)
+        .await
+        .map_err(|e| CliError::Sdk(e.into()))?;
 
-    if resp.transfers.is_empty() {
+    if transfers.is_empty() {
         println!("No pending transfers.");
     } else {
-        let json = serde_json::to_string_pretty(&resp.transfers)
-            .unwrap_or_else(|_| format!("{:?}", resp.transfers));
+        let json = serde_json::to_string_pretty(&transfers)
+            .unwrap_or_else(|_| format!("{:?}", transfers));
         println!("{json}");
     }
     Ok(())
@@ -159,17 +109,17 @@ async fn pending_by_nonce(
     args: CctpPendingByNonceArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let resp: morpheum_sdk_cctp::PendingTransferResponse = smart_query(
-        dispatcher,
+    let client = cctp_client(dispatcher).await?;
+    let transfer = morpheum_sdk_cctp::query_pending_by_nonce(
+        &client,
         &args.contract,
-        &morpheum_sdk_cctp::QueryMsg::PendingByNonce {
-            source_domain: args.source_domain,
-            nonce: args.nonce,
-        },
+        args.source_domain,
+        args.nonce,
     )
-    .await?;
+    .await
+    .map_err(|e| CliError::Sdk(e.into()))?;
 
-    match resp.transfer {
+    match transfer {
         Some(transfer) => {
             let json = serde_json::to_string_pretty(&transfer)
                 .unwrap_or_else(|_| format!("{transfer:?}"));
@@ -186,18 +136,16 @@ async fn pending_by_nonce(
 }
 
 async fn routes(args: CctpRoutesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let resp: morpheum_sdk_cctp::RoutesResponse = smart_query(
-        dispatcher,
-        &args.contract,
-        &morpheum_sdk_cctp::QueryMsg::Routes {},
-    )
-    .await?;
+    let client = cctp_client(dispatcher).await?;
+    let routes = morpheum_sdk_cctp::query_routes(&client, &args.contract)
+        .await
+        .map_err(|e| CliError::Sdk(e.into()))?;
 
-    if resp.routes.is_empty() {
+    if routes.is_empty() {
         println!("No routes enrolled.");
     } else {
-        let json = serde_json::to_string_pretty(&resp.routes)
-            .unwrap_or_else(|_| format!("{:?}", resp.routes));
+        let json = serde_json::to_string_pretty(&routes)
+            .unwrap_or_else(|_| format!("{:?}", routes));
         println!("{json}");
     }
     Ok(())

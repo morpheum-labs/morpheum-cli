@@ -43,7 +43,7 @@ morpheum-sdk-evm = { path = "../morpheum-sdk/crates/evm" }
 morpheum-sdk-svm = { path = "../morpheum-sdk/crates/svm" }
 morpheum-sdk-cosmwasm = { path = "../morpheum-sdk/crates/cosmwasm" }
 morpheum-sdk-cctp = { path = "../morpheum-sdk/crates/cctp", optional = true }
-morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std"], optional = true }
+morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std", "serde"], optional = true }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
 morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
 morpheum-primitives = { path = "../morpheum-primitives" }

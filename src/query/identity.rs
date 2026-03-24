@@ -1,5 +1,7 @@
 use clap::{Args, Subcommand};
 
+use morpheum_sdk_native::identity::IdentityClient;
+
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -24,37 +26,16 @@ pub async fn execute(cmd: IdentityQueryCommands, dispatcher: Dispatcher) -> Resu
 }
 
 async fn get_agent(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
+    let transport = dispatcher.grpc_transport().await?;
+    let client = IdentityClient::new(dispatcher.sdk_config(), Box::new(transport));
 
-    let mut client =
-        morpheum_proto::identity::v1::query_client::QueryClient::new(channel);
-
-    let (agent_hash, did) = if args.id.starts_with("did:") {
-        (String::new(), args.id.clone())
+    let result = if args.id.starts_with("did:") {
+        client.query_agent_by_did(&args.id).await?
     } else {
-        (args.id.clone(), String::new())
+        client.query_agent(&args.id).await?
     };
 
-    let request = morpheum_proto::identity::v1::QueryAgentRequest {
-        agent_hash,
-        did,
-    };
-
-    let response = client
-        .query_agent(tonic::Request::new(request))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryAgent failed: {e}")))?
-        .into_inner();
-
-    if !response.found {
-        return Err(CliError::Transport(format!(
-            "agent '{}' not found",
-            args.id
-        )));
-    }
-
-    let json = serde_json::to_string_pretty(&response)
-        .unwrap_or_else(|_| format!("{response:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
 
     Ok(())

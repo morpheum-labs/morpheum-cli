@@ -1,6 +1,7 @@
 use clap::{Args, Subcommand};
 
 use morpheum_proto::validation::v1::ProofType as ProtoProofType;
+use morpheum_sdk_native::validation::{ProofType, ValidationClient};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -74,19 +75,10 @@ pub async fn execute(
 }
 
 async fn query_proof(args: ProofArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_proof(tonic::Request::new(
-            morpheum_proto::validation::v1::QueryProofRequest {
-                proof_id: args.proof_id,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_proof failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ValidationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_proof(args.proof_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -95,21 +87,12 @@ async fn query_proofs_by_agent(
     args: ProofsByAgentArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_proofs_by_agent(tonic::Request::new(
-            morpheum_proto::validation::v1::QueryProofsByAgentRequest {
-                agent_hash: args.agent_hash,
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_proofs_by_agent failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ValidationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client
+        .query_proofs_by_agent(args.agent_hash, args.limit, args.offset)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -118,37 +101,25 @@ async fn query_proofs_by_type(
     args: ProofsByTypeArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_proofs_by_type(tonic::Request::new(
-            morpheum_proto::validation::v1::QueryProofsByTypeRequest {
-                proof_type: args.proof_type.into(),
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_proofs_by_type failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ValidationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client
+        .query_proofs_by_type(
+            ProofType::from_proto(args.proof_type.into()),
+            args.limit,
+            args.offset,
+        )
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::validation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::validation::v1::QueryParamsRequest {},
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_params failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ValidationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

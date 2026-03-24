@@ -1,11 +1,5 @@
 use clap::{Args, Subcommand};
 
-use morpheum_proto::directory::v1::query_client::QueryClient;
-use morpheum_proto::directory::v1::{
-    DirectoryFilter, QueryDirectoryProfileRequest, QueryDirectoryProfilesRequest,
-    QueryParamsRequest,
-};
-
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -65,18 +59,15 @@ pub async fn execute(
 }
 
 async fn query_profile(args: ProfileArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::directory::DirectoryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let agent_hash = args.agent_hash.clone();
-    let response = client
-        .query_directory_profile(tonic::Request::new(QueryDirectoryProfileRequest {
-            agent_hash: args.agent_hash,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryDirectoryProfile failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.found {
+    let result = client.query_profile(args.agent_hash).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No directory profile found for agent {agent_hash}");
@@ -85,33 +76,33 @@ async fn query_profile(args: ProfileArgs, dispatcher: &Dispatcher) -> Result<(),
 }
 
 async fn query_profiles(args: ProfilesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::directory::DirectoryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let filter = build_filter(&args);
-    let response = client
-        .query_directory_profiles(tonic::Request::new(QueryDirectoryProfilesRequest {
-            filter,
-            limit: args.limit,
-            offset: args.offset,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryDirectoryProfiles failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let (profiles, total_count) = client
+        .query_profiles(args.limit, args.offset, filter)
+        .await?;
+    let result = serde_json::json!({
+        "profiles": profiles,
+        "total_count": total_count,
+    });
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(QueryParamsRequest {}))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.params.is_some() {
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::directory::DirectoryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No directory parameters configured");
@@ -119,20 +110,19 @@ async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     Ok(())
 }
 
-fn build_filter(args: &ProfilesArgs) -> Option<DirectoryFilter> {
+fn build_filter(args: &ProfilesArgs) -> Option<morpheum_sdk_native::directory::DirectoryFilter> {
     let has_filters = args.min_reputation.is_some() || args.tags.is_some();
 
     if !has_filters {
         return None;
     }
 
-    Some(DirectoryFilter {
+    Some(morpheum_sdk_native::directory::DirectoryFilter {
         min_reputation: args.min_reputation.unwrap_or(0),
         min_milestone_level: 0,
         tags: args.tags.clone().unwrap_or_default(),
         semantic_query: String::new(),
         limit: 0,
         offset: 0,
-        x402_only: false,
     })
 }

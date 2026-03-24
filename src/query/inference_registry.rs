@@ -1,10 +1,6 @@
 use clap::{Args, Subcommand};
 
-use morpheum_proto::inference_registry::v1::query_client::QueryClient;
-use morpheum_proto::inference_registry::v1::{
-    QuantFormat, QueryModelRequest, QueryModelsByQuantRequest,
-    QueryActiveModelsRequest, QueryParamsRequest,
-};
+use morpheum_sdk_native::inference_registry::QuantFormat;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -63,18 +59,15 @@ pub async fn execute(
 }
 
 async fn query_model(args: ModelArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let model_id = args.model_id.clone();
-    let response = client
-        .query_model(tonic::Request::new(QueryModelRequest {
-            model_id: args.model_id,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryModel failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.model.is_some() {
+    let result = client.query_model(args.model_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No model found with ID {model_id}");
@@ -86,43 +79,38 @@ async fn query_models_by_quant(
     args: ModelsByQuantArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_models_by_quant(tonic::Request::new(QueryModelsByQuantRequest {
-            quant_format: args.quant_format.into(),
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryModelsByQuant failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_models_by_quant(args.quant_format).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_active_models(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_active_models(tonic::Request::new(QueryActiveModelsRequest {}))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryActiveModels failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_active_models().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(QueryParamsRequest {}))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.params.is_some() {
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No inference registry parameters configured");

@@ -1,5 +1,7 @@
 use clap::{Args, Subcommand};
 
+use morpheum_sdk_native::reputation::ReputationClient;
+
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -63,39 +65,21 @@ pub async fn execute(cmd: ReputationQueryCommands, dispatcher: Dispatcher) -> Re
 }
 
 async fn query_score(args: ScoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_reputation_score(tonic::Request::new(
-            morpheum_proto::reputation::v1::QueryReputationScoreRequest {
-                agent_hash: args.agent_hash,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_reputation_score failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ReputationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_score(args.agent_hash).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_history(args: HistoryArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_reputation_history(tonic::Request::new(
-            morpheum_proto::reputation::v1::QueryReputationHistoryRequest {
-                agent_hash: args.agent_hash,
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_reputation_history failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ReputationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client
+        .query_history(args.agent_hash, args.limit, args.offset)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -104,35 +88,19 @@ async fn query_milestone_status(
     args: MilestoneStatusArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_milestone_status(tonic::Request::new(
-            morpheum_proto::reputation::v1::QueryMilestoneStatusRequest {
-                agent_hash: args.agent_hash,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_milestone_status failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ReputationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_milestone_status(args.agent_hash).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::reputation::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::reputation::v1::QueryParamsRequest {},
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_params failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = ReputationClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

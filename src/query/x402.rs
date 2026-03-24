@@ -79,19 +79,14 @@ pub async fn execute(
 }
 
 async fn query_receipt(args: ReceiptArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::x402::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_receipt(tonic::Request::new(
-            morpheum_proto::x402::v1::QueryReceiptRequest {
-                receipt_id: args.receipt_id,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryReceipt failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::x402::X402Client::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_receipt(args.receipt_id).await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -100,40 +95,29 @@ async fn query_receipts(
     args: ReceiptsByAgentArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::x402::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_receipts_by_agent(tonic::Request::new(
-            morpheum_proto::x402::v1::QueryReceiptsByAgentRequest {
-                agent_id: args.agent_id,
-                limit: args.limit,
-                pagination_key: args.pagination_key.unwrap_or_default(),
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryReceiptsByAgent failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::x402::X402Client::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client
+        .query_receipts_by_agent(args.agent_id, args.limit, args.pagination_key)
+        .await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_policy(args: PolicyArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::x402::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_policy(tonic::Request::new(
-            morpheum_proto::x402::v1::QueryPolicyRequest {
-                agent_id: args.agent_id,
-                policy_id: args.policy_id,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryPolicy failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::x402::X402Client::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_policy(args.agent_id, args.policy_id).await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -142,35 +126,27 @@ async fn query_capabilities(
     args: CapabilitiesArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::x402::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_capabilities(tonic::Request::new(
-            morpheum_proto::x402::v1::QueryCapabilitiesRequest {
-                agent_id: args.agent_id,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryCapabilities failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::x402::X402Client::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_capabilities(args.agent_id).await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::x402::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::x402::v1::QueryParamsRequest::default(),
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::x402::X402Client::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
     let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

@@ -62,74 +62,53 @@ pub async fn execute(cmd: IntentQueryCommands, dispatcher: Dispatcher) -> Result
 }
 
 async fn query_intent(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::intent::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_intent(tonic::Request::new(
-            morpheum_proto::intent::v1::QueryIntentRequest {
-                intent_id: args.intent_id,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryIntent failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::intent::IntentClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_intent(args.intent_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_by_agent(args: ByAgentArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::intent::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_intents_by_agent(tonic::Request::new(
-            morpheum_proto::intent::v1::QueryIntentsByAgentRequest {
-                agent_hash: args.agent_hash,
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryIntentsByAgent failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::intent::IntentClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client
+        .query_intents_by_agent(args.agent_hash, args.limit, args.offset)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_active(args: ActiveArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::intent::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_active_intents(tonic::Request::new(
-            morpheum_proto::intent::v1::QueryActiveIntentsRequest {
-                agent_hash: args.agent_hash,
-                limit: args.limit,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryActiveIntents failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::intent::IntentClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client
+        .query_active_intents(args.agent_hash, args.limit)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::intent::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::intent::v1::QueryParamsRequest::default(),
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::intent::IntentClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

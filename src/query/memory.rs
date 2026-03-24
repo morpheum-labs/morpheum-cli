@@ -1,5 +1,7 @@
 use clap::{Args, Subcommand};
 
+use morpheum_sdk_native::memory::MemoryClient;
+
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -65,20 +67,10 @@ pub async fn execute(cmd: MemoryQueryCommands, dispatcher: Dispatcher) -> Result
 }
 
 async fn query_entry(args: EntryArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_memory_entry(tonic::Request::new(
-            morpheum_proto::memory::v1::QueryMemoryEntryRequest {
-                agent_hash: args.agent_hash,
-                key: args.key,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_memory_entry failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = MemoryClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_entry(args.agent_hash, args.key).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -87,21 +79,12 @@ async fn query_entries_by_agent(
     args: EntriesByAgentArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_memory_entries_by_agent(tonic::Request::new(
-            morpheum_proto::memory::v1::QueryMemoryEntriesByAgentRequest {
-                agent_hash: args.agent_hash,
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_memory_entries_by_agent failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = MemoryClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client
+        .query_entries_by_agent(args.agent_hash, args.limit, args.offset)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -110,35 +93,19 @@ async fn query_memory_root(
     args: MemoryRootArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_memory_root(tonic::Request::new(
-            morpheum_proto::memory::v1::QueryMemoryRootRequest {
-                agent_hash: args.agent_hash,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_memory_root failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = MemoryClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_memory_root(args.agent_hash).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client =
-        morpheum_proto::memory::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::memory::v1::QueryParamsRequest {},
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("query_params failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = MemoryClient::new(dispatcher.sdk_config(), Box::new(transport));
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

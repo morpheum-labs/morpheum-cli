@@ -1,11 +1,5 @@
 use clap::{Args, Subcommand};
 
-use morpheum_proto::agent_registry::v1::query_client::QueryClient;
-use morpheum_proto::agent_registry::v1::{
-    QueryAgentRecordRequest, QueryAgentByCaipRequest, QueryExportStatusRequest,
-    QueryParamsRequest,
-};
-
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -72,18 +66,15 @@ pub async fn execute(
 }
 
 async fn query_record(args: RecordArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let agent_hash = args.agent_hash.clone();
-    let response = client
-        .query_agent_record(tonic::Request::new(QueryAgentRecordRequest {
-            agent_hash: args.agent_hash,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryAgentRecord failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.record.is_some() {
+    let result = client.query_agent_record(args.agent_hash).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No agent record found for hash {agent_hash}");
@@ -92,18 +83,15 @@ async fn query_record(args: RecordArgs, dispatcher: &Dispatcher) -> Result<(), C
 }
 
 async fn query_by_caip(args: ByCaipArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let caip_id = args.caip_id.clone();
-    let response = client
-        .query_agent_by_caip(tonic::Request::new(QueryAgentByCaipRequest {
-            caip_id: args.caip_id,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryAgentByCAIP failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.record.is_some() {
+    let result = client.query_agent_by_caip(args.caip_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No agent found for CAIP-10 identifier {caip_id}");
@@ -115,31 +103,28 @@ async fn query_export_status(
     args: ExportStatusArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_export_status(tonic::Request::new(QueryExportStatusRequest {
-            agent_hash: args.agent_hash,
-            protocols: args.protocols,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryExportStatus failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client
+        .query_export_status(args.agent_hash, args.protocols)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(QueryParamsRequest {}))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.params.is_some() {
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No agent registry parameters configured");

@@ -1,5 +1,4 @@
 use clap::{Args, Subcommand};
-use morpheum_primitives::constants::assets;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -7,6 +6,7 @@ use crate::error::CliError;
 /// Query commands for the `bank` module.
 ///
 /// Read-only access to account balances, asset metadata, and supply info.
+/// All queries are delegated to `morpheum_sdk_bank::BankClient`.
 #[derive(Subcommand)]
 pub enum BankQueryCommands {
     /// Get the balance of a specific asset for an address
@@ -58,77 +58,34 @@ pub async fn execute(cmd: BankQueryCommands, dispatcher: Dispatcher) -> Result<(
     }
 }
 
-fn resolve_asset_index(name: &str) -> Result<u64, CliError> {
-    match name.to_uppercase().as_str() {
-        "MORM" => Ok(assets::MORM_INDEX),
-        "USDC" => Ok(assets::USDC_INDEX),
-        "BTC" => Ok(assets::BTC_INDEX),
-        "ETH" => Ok(assets::ETH_INDEX),
-        "USDT" => Ok(assets::USDT_INDEX),
-        "SOL" => Ok(assets::SOL_INDEX),
-        _ => Err(CliError::invalid_input(format!(
-            "unknown asset name '{name}' — known: MORM (0), USDC (1), BTC (2), ETH (3), USDT (4), SOL (5)"
-        ))),
-    }
-}
-
 async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let asset_index = match &args.asset {
-        Some(name) => resolve_asset_index(name)?,
+        Some(name) => morpheum_sdk_native::bank::resolve_asset_index(name)?,
         None => args.asset_index,
     };
 
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::bank::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_balance(tonic::Request::new(morpheum_proto::bank::v1::QueryBalanceRequest {
-            address: args.address.clone(),
-            asset_index,
-            chain_type: None,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryBalance failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let client = dispatcher.bank_client().await?;
+    let result = client.query_balance(&args.address, asset_index).await?;
+    let json = serde_json::to_string_pretty(&result)
+        .unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn balances(args: BalancesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::bank::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_balances(tonic::Request::new(
-            morpheum_proto::bank::v1::QueryBalancesRequest {
-                address: args.address.clone(),
-                chain_type: None,
-                asset_type_filter: None,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryBalances failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let client = dispatcher.bank_client().await?;
+    let result = client.query_balances(&args.address).await?;
+    let json = serde_json::to_string_pretty(&result)
+        .unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_assets(args: AssetsArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::bank::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_assets(tonic::Request::new(
-            morpheum_proto::bank::v1::QueryAssetsRequest {
-                type_filter: args.type_filter,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryAssets failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let client = dispatcher.bank_client().await?;
+    let result = client.query_assets(args.type_filter).await?;
+    let json = serde_json::to_string_pretty(&result)
+        .unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

@@ -1,11 +1,5 @@
 use clap::{Args, Subcommand};
 
-use morpheum_proto::interop::v1::query_client::QueryClient;
-use morpheum_proto::interop::v1::{
-    QueryBridgeRequestRequest, QueryIntentExportRequest, QueryProofExportRequest,
-    QueryParamsRequest,
-};
-
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
@@ -71,18 +65,15 @@ async fn query_bridge_request(
     args: BridgeRequestArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::interop::InteropClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let request_id = args.request_id.clone();
-    let response = client
-        .query_bridge_request(tonic::Request::new(QueryBridgeRequestRequest {
-            request_id: args.request_id,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryBridgeRequest failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.found {
+    let result = client.query_bridge_request(args.request_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No bridge request found with ID {request_id}");
@@ -94,24 +85,25 @@ async fn query_intent_export(
     args: IntentExportArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::interop::InteropClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let intent_id = args.intent_id.clone();
-    let response = client
-        .query_intent_export(tonic::Request::new(QueryIntentExportRequest {
-            intent_id: args.intent_id,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryIntentExport failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.found {
-        println!("{json}");
-        if !response.target_tx_hash.is_empty() {
-            println!("Target tx hash: {}", response.target_tx_hash);
+    let result = client.query_intent_export(args.intent_id).await?;
+    match result {
+        Some((packet, target_tx_hash)) => {
+            let json =
+                serde_json::to_string_pretty(&packet).unwrap_or_else(|_| format!("{packet:?}"));
+            println!("{json}");
+            if !target_tx_hash.is_empty() {
+                println!("Target tx hash: {target_tx_hash}");
+            }
         }
-    } else {
-        println!("No intent export found for ID {intent_id}");
+        None => {
+            println!("No intent export found for ID {intent_id}");
+        }
     }
     Ok(())
 }
@@ -120,18 +112,15 @@ async fn query_proof_export(
     args: ProofExportArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::interop::InteropClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
     let proof_id = args.proof_id.clone();
-    let response = client
-        .query_proof_export(tonic::Request::new(QueryProofExportRequest {
-            proof_id: args.proof_id,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryProofExport failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.found {
+    let result = client.query_proof_export(args.proof_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No proof export found for ID {proof_id}");
@@ -140,15 +129,14 @@ async fn query_proof_export(
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(QueryParamsRequest {}))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
-    let json = serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
-    if response.params.is_some() {
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::interop::InteropClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    if result.is_some() {
         println!("{json}");
     } else {
         println!("No interop parameters configured");

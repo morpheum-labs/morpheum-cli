@@ -89,75 +89,53 @@ pub async fn execute(cmd: VcQueryCommands, dispatcher: Dispatcher) -> Result<(),
 }
 
 async fn query_vc(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::vc::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_vc(tonic::Request::new(morpheum_proto::vc::v1::QueryVcRequest {
-            vc_id: args.vc_id,
-        }))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryVc failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::vc::VcClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_vc(args.vc_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_status(args: StatusArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::vc::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_vc_status(tonic::Request::new(
-            morpheum_proto::vc::v1::QueryVcStatusRequest {
-                vc_id: args.vc_id,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryVcStatus failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::vc::VcClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_vc_status(args.vc_id).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_by_issuer(args: ByIssuerArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::vc::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_vcs_by_issuer(tonic::Request::new(
-            morpheum_proto::vc::v1::QueryVcsByIssuerRequest {
-                issuer_agent_hash: args.issuer,
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryVcsByIssuer failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::vc::VcClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client
+        .query_vcs_by_issuer(args.issuer, args.limit, args.offset)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn query_by_subject(args: BySubjectArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::vc::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_vcs_by_subject(tonic::Request::new(
-            morpheum_proto::vc::v1::QueryVcsBySubjectRequest {
-                subject_agent_hash: args.subject,
-                limit: args.limit,
-                offset: args.offset,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryVcsBySubject failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::vc::VcClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client
+        .query_vcs_by_subject(args.subject, args.limit, args.offset)
+        .await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -166,39 +144,25 @@ async fn query_revocation_bitmap(
     args: RevocationBitmapArgs,
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
-    let issuer = args.issuer.clone();
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::vc::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_revocation_bitmap(tonic::Request::new(
-            morpheum_proto::vc::v1::QueryRevocationBitmapRequest {
-                issuer_agent_hash: args.issuer,
-            },
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryRevocationBitmap failed: {e}")))?
-        .into_inner();
-    dispatcher.output.info(format!(
-        "Revocation bitmap for issuer {} ({} bytes)",
-        issuer,
-        response.bitmap.len()
-    ));
-    dispatcher.output.success(hex::encode(&response.bitmap));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::vc::VcClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_revocation_bitmap(args.issuer).await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    println!("{json}");
     Ok(())
 }
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-    let mut client = morpheum_proto::vc::v1::query_client::QueryClient::new(channel);
-    let response = client
-        .query_params(tonic::Request::new(
-            morpheum_proto::vc::v1::QueryParamsRequest::default(),
-        ))
-        .await
-        .map_err(|e| CliError::Transport(format!("QueryParams failed: {e}")))?
-        .into_inner();
-    let json =
-        serde_json::to_string_pretty(&response).unwrap_or_else(|_| format!("{response:?}"));
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::vc::VcClient::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+    let result = client.query_params().await?;
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

@@ -21,6 +21,43 @@ impl Dispatcher {
         Self { config, keyring, output }
     }
 
+    /// Returns an `SdkConfig` derived from the CLI's current configuration.
+    pub fn sdk_config(&self) -> morpheum_sdk_core::SdkConfig {
+        morpheum_sdk_core::SdkConfig::new(
+            self.config.rpc_url.clone(),
+            self.config.chain_id.clone(),
+        )
+    }
+
+    /// Creates a `GrpcTransport` connected to the configured RPC endpoint.
+    pub async fn grpc_transport(&self) -> Result<morpheum_sdk_native::GrpcTransport, CliError> {
+        morpheum_sdk_native::GrpcTransport::connect(&self.config.rpc_url)
+            .await
+            .map_err(CliError::Sdk)
+    }
+
+    /// Creates a `BankClient` backed by a live gRPC connection.
+    #[cfg(feature = "bank")]
+    pub async fn bank_client(&self) -> Result<morpheum_sdk_native::bank::BankClient, CliError> {
+        let transport = self.grpc_transport().await?;
+        Ok(morpheum_sdk_native::bank::BankClient::new(
+            self.sdk_config(),
+            Box::new(transport),
+        ))
+    }
+
+    /// Creates an `IdentityClient` backed by a live gRPC connection.
+    #[cfg(feature = "identity")]
+    pub async fn identity_client(
+        &self,
+    ) -> Result<morpheum_sdk_native::identity::IdentityClient, CliError> {
+        let transport = self.grpc_transport().await?;
+        Ok(morpheum_sdk_native::identity::IdentityClient::new(
+            self.sdk_config(),
+            Box::new(transport),
+        ))
+    }
+
     /// Routes the parsed command to the appropriate module.
     pub async fn execute(self, cmd: Commands) -> Result<(), CliError> {
         match cmd {
