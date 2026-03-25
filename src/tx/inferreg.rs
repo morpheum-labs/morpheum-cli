@@ -1,12 +1,12 @@
 use clap::{Args, Subcommand};
 
 use morpheum_signing_native::signer::Signer;
-use morpheum_sdk_native::inference_registry::{RegisterModelBuilder, QuantFormat};
+use morpheum_sdk_native::inferreg::{RegisterModelBuilder, QuantFormat};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Transaction commands for the `inference_registry` module.
+/// Transaction commands for the `inferreg` module.
 ///
 /// Manages on-chain model commitments with zk verification support —
 /// the AI primitive layer that backs the mwvm runtime (Pillar 1).

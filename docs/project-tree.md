@@ -30,7 +30,7 @@ morpheum-cli/
 │   ├── tx/                          # All on-chain modules (1:1 mapping)
 │   │   ├── mod.rs
 │   │   ├── identity.rs
-│   │   ├── agent_registry.rs        # Direct access to agent registry
+│   │   ├── agentreg.rs        # Direct access to agent registry
 │   │   ├── interop.rs               # Direct access to interop / GMP
 │   │   ├── reputation.rs
 │   │   ├── validation.rs
@@ -39,7 +39,7 @@ morpheum-cli/
 │   │   ├── intent.rs
 │   │   ├── marketplace.rs
 │   │   ├── job.rs
-│   │   ├── inference_registry.rs
+│   │   ├── inferreg.rs
 │   │   ├── directory.rs
 │   │   ├── bank.rs
 │   │   └── x402.rs                  # Payment primitive (kept under tx)
@@ -47,7 +47,7 @@ morpheum-cli/
 │   ├── query/                       # Mirror of tx/ (same 14 modules)
 │   │   ├── mod.rs
 │   │   ├── identity.rs
-│   │   ├── agent_registry.rs
+│   │   ├── agentreg.rs
 │   │   ├── interop.rs
 │   │   ├── reputation.rs
 │   │   ├── validation.rs
@@ -56,7 +56,7 @@ morpheum-cli/
 │   │   ├── intent.rs
 │   │   ├── marketplace.rs
 │   │   ├── job.rs
-│   │   ├── inference_registry.rs
+│   │   ├── inferreg.rs
 │   │   ├── directory.rs
 │   │   ├── bank.rs
 │   │   └── x402.rs
@@ -112,7 +112,7 @@ This structure eliminates the confusion you pointed out: no two commands do the 
 morpheum tx identity register --full --did "did:agent:alpha" --name "AlphaTrader"
 morpheum tx interop send-proof --agent did:agent:trader --to-chain ethereum
 morpheum tx x402 pay did:agent:alpha 2500000
-morpheum query agent_registry get did:agent:alpha
+morpheum query agentreg get did:agent:alpha
 ```
 
 **Protocol / Dev tools (top-level only)**:

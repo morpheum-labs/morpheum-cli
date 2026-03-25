@@ -4,7 +4,7 @@ The CLI is built with **two distinct layers** on purpose:
 
 | Layer | Prefix | Purpose | Examples | Maps to |
 |-------|--------|--------|----------|--------|
-| **Low-level** (Plumbing) | `tx` / `query` | Direct, precise access to **individual on-chain modules** | `morpheum tx interop ...`<br>`morpheum query agent_registry ...` | 1:1 with actual Mormcore modules (`interop`, `agent_registry`, `identity`, etc.) |
+| **Low-level** (Plumbing) | `tx` / `query` | Direct, precise access to **individual on-chain modules** | `morpheum tx interop ...`<br>`morpheum query agentreg ...` | 1:1 with actual Mormcore modules (`interop`, `agentreg`, `identity`, etc.) |
 | **High-level** (Porcelain / UX) | Top-level (no prefix) | User-friendly, workflow-oriented commands that **orchestrate** multiple modules | <br>`morpheum mcp ...`<br>`morpheum a2a ...`<br>`morpheum mwvm ...` | Convenience facades on top of low-level modules |
 
 This is the **standard "porcelain vs plumbing"** pattern used in Git, Docker, Cargo, and modern CLIs. It is **not** redundancy — it is deliberate layering for two different audiences.
@@ -13,8 +13,8 @@ This is the **standard "porcelain vs plumbing"** pattern used in Git, Docker, Ca
 
 | Top-level CLI Command | What it actually does | Which on-chain module(s) it uses internally | Why it exists |
 |-----------------------|-----------------------|---------------------------------------------|--------------|
-| `mcp`                 | MCP protocol interaction | `agent_registry` + `interop` + MCP gateway | Matches how people use Claude/Cursor |
-| `a2a`                 | Agent-to-Agent collaboration | `agent_registry` + `interop` + A2A gateway | Matches how people use LangGraph/ADK |
+| `mcp`                 | MCP protocol interaction | `agentreg` + `interop` + MCP gateway | Matches how people use Claude/Cursor |
+| `a2a`                 | Agent-to-Agent collaboration | `agentreg` + `interop` + A2A gateway | Matches how people use LangGraph/ADK |
 | `mwvm`                | Local simulation & developer tools | `mwvm` runtime (Pillar 1) | Developer experience (Pillar 1) |
 
 ### Why This Is Optimal (Not Redundant)
@@ -33,7 +33,7 @@ This gives you **both**:
 **Low-level (direct module access)**:
 ```bash
 morpheum tx interop send-proof --agent did:agent:trader --to-chain ethereum
-morpheum query agent_registry get did:agent:alpha
+morpheum query agentreg get did:agent:alpha
 ```
 
 **High-level (convenient UX)**:
@@ -49,7 +49,7 @@ This is the same pattern used in `gh` (GitHub CLI), `cargo`, and every successfu
 ### Summary
 
 - `bridge` ≠ `interop` module → `bridge` is the **user-friendly wrapper** around the `interop` module.
-- `agent` ≠ `agent_registry` module → `agent` is the **unified orchestration** layer that uses `agent_registry` + `identity` + others.
+- `agent` ≠ `agentreg` module → `agent` is the **unified orchestration** layer that uses `agentreg` + `identity` + others.
 - **No redundancy** — two different abstraction levels for two different use cases.
 
 This design is **intentional**, **optimal**, and follows industry best practices.

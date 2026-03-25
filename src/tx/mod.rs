@@ -21,10 +21,10 @@ pub mod intent;
 pub mod marketplace;
 #[cfg(feature = "job")]
 pub mod job;
-#[cfg(feature = "inference_registry")]
-pub mod inference_registry;
-#[cfg(feature = "agent_registry")]
-pub mod agent_registry;
+#[cfg(feature = "inferreg")]
+pub mod inferreg;
+#[cfg(feature = "agentreg")]
+pub mod agentreg;
 #[cfg(feature = "directory")]
 pub mod directory;
 #[cfg(feature = "interop")]
@@ -82,13 +82,13 @@ pub enum TxCommands {
     #[command(subcommand)]
     Job(job::JobCommands),
 
-    #[cfg(feature = "inference_registry")]
+    #[cfg(feature = "inferreg")]
     #[command(subcommand)]
-    InferenceRegistry(inference_registry::InferenceRegistryCommands),
+    InferenceRegistry(inferreg::InferenceRegistryCommands),
 
-    #[cfg(feature = "agent_registry")]
+    #[cfg(feature = "agentreg")]
     #[command(subcommand)]
-    AgentRegistry(agent_registry::AgentRegistryCommands),
+    AgentRegistry(agentreg::AgentRegistryCommands),
 
     #[cfg(feature = "directory")]
     #[command(subcommand)]
@@ -142,10 +142,10 @@ pub async fn execute(cmd: TxCommands, dispatcher: Dispatcher) -> Result<(), CliE
         TxCommands::Marketplace(sub) => marketplace::execute(sub, dispatcher).await,
         #[cfg(feature = "job")]
         TxCommands::Job(sub) => job::execute(sub, dispatcher).await,
-        #[cfg(feature = "inference_registry")]
-        TxCommands::InferenceRegistry(sub) => inference_registry::execute(sub, dispatcher).await,
-        #[cfg(feature = "agent_registry")]
-        TxCommands::AgentRegistry(sub) => agent_registry::execute(sub, dispatcher).await,
+        #[cfg(feature = "inferreg")]
+        TxCommands::InferenceRegistry(sub) => inferreg::execute(sub, dispatcher).await,
+        #[cfg(feature = "agentreg")]
+        TxCommands::AgentRegistry(sub) => agentreg::execute(sub, dispatcher).await,
         #[cfg(feature = "directory")]
         TxCommands::Directory(sub) => directory::execute(sub, dispatcher).await,
         #[cfg(feature = "interop")]

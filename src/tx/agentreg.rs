@@ -1,12 +1,12 @@
 use clap::{Args, Subcommand};
 
 use morpheum_signing_native::signer::Signer;
-use morpheum_sdk_native::agent_registry::TriggerProtocolSyncBuilder;
+use morpheum_sdk_native::agentreg::TriggerProtocolSyncBuilder;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Transaction commands for the `agent_registry` module.
+/// Transaction commands for the `agentreg` module.
 ///
 /// The central interoperability sync engine that keeps the unified
 /// agent registry in sync with ERC-8004, A2A, MCP, DID, and x402

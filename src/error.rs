@@ -30,7 +30,7 @@ pub enum CliError {
     #[error("Agent not found: {id}")]
     #[diagnostic(
         code(morpheum::cli::agent_not_found),
-        help("Verify the agent ID with `morpheum query agent-registry get`")
+        help("Verify the agent ID with `morpheum query agentreg get`")
     )]
     #[allow(dead_code)]
     AgentNotFound { id: String },

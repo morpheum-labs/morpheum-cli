@@ -23,10 +23,10 @@ pub mod intent;
 pub mod marketplace;
 #[cfg(feature = "job")]
 pub mod job;
-#[cfg(feature = "inference_registry")]
-pub mod inference_registry;
-#[cfg(feature = "agent_registry")]
-pub mod agent_registry;
+#[cfg(feature = "inferreg")]
+pub mod inferreg;
+#[cfg(feature = "agentreg")]
+pub mod agentreg;
 #[cfg(feature = "directory")]
 pub mod directory;
 #[cfg(feature = "interop")]
@@ -89,13 +89,13 @@ pub enum QueryCommands {
     #[command(subcommand)]
     Job(job::JobQueryCommands),
 
-    #[cfg(feature = "inference_registry")]
+    #[cfg(feature = "inferreg")]
     #[command(subcommand)]
-    InferenceRegistry(inference_registry::InferenceRegistryQueryCommands),
+    InferenceRegistry(inferreg::InferenceRegistryQueryCommands),
 
-    #[cfg(feature = "agent_registry")]
+    #[cfg(feature = "agentreg")]
     #[command(subcommand)]
-    AgentRegistry(agent_registry::AgentRegistryQueryCommands),
+    AgentRegistry(agentreg::AgentRegistryQueryCommands),
 
     #[cfg(feature = "directory")]
     #[command(subcommand)]
@@ -155,10 +155,10 @@ pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), C
         QueryCommands::Marketplace(sub) => marketplace::execute(sub, dispatcher).await,
         #[cfg(feature = "job")]
         QueryCommands::Job(sub) => job::execute(sub, dispatcher).await,
-        #[cfg(feature = "inference_registry")]
-        QueryCommands::InferenceRegistry(sub) => inference_registry::execute(sub, dispatcher).await,
-        #[cfg(feature = "agent_registry")]
-        QueryCommands::AgentRegistry(sub) => agent_registry::execute(sub, dispatcher).await,
+        #[cfg(feature = "inferreg")]
+        QueryCommands::InferenceRegistry(sub) => inferreg::execute(sub, dispatcher).await,
+        #[cfg(feature = "agentreg")]
+        QueryCommands::AgentRegistry(sub) => agentreg::execute(sub, dispatcher).await,
         #[cfg(feature = "directory")]
         QueryCommands::Directory(sub) => directory::execute(sub, dispatcher).await,
         #[cfg(feature = "interop")]

@@ -97,7 +97,7 @@ morpheum a2a collaborate did:agent:research-bot --goal "market analysis"
 ```
 
 **Internal Flow**:
-1. CLI resolves target via agent_registry
+1. CLI resolves target via agentreg
 2. Sends A2A envelope (with optional x402 payment)
 3. Receives response with proof
 

@@ -2,7 +2,7 @@
 
 ### Core Principle (Why the split exists)
 
-- **On-chain modules** (identity, reputation, validation, memory, vc, intent, marketplace, job, inference_registry, agent_registry, directory, interop, bank, x402)  
+- **On-chain modules** (identity, reputation, validation, memory, vc, intent, marketplace, job, inferreg, agentreg, directory, interop, bank, x402)  
   → Always under **`tx`** and **`query`**  
   These are low-level, precise operations that touch the blockchain directly.
 

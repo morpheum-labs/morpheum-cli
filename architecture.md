@@ -8,7 +8,7 @@ Users type exactly what you expect:
 
 ```bash
 morpheum tx bank send morpheum1... morpheum1... 1000umorph --from my-agent
-morpheum query agent-registry agent-by-caip "morpheum:1:agent-0x..."
+morpheum query agentreg agent-by-caip "morpheum:1:agent-0x..."
 morpheum keys add my-trading-key --ledger
 morpheum agent register --name "MyZKMLTrader" --model-commitment Qm...
 morpheum status
@@ -58,7 +58,7 @@ graph TD
     end
 
     subgraph "Modules (DRY per-module)"
-        Tx["tx/<module>.rs<br/>(bank, auth, agent-registry...)"]
+        Tx["tx/<module>.rs<br/>(bank, auth, agentreg...)"]
         Query["query/<module>.rs"]
         Keys["keys.rs"]
         Agent["agent.rs"]
@@ -94,7 +94,7 @@ morpheum-cli/
 │   │   ├── mod.rs
 │   │   ├── bank.rs
 │   │   ├── auth.rs
-│   │   ├── agent_registry.rs
+│   │   ├── agentreg.rs
 │   │   └── ...                 # one file per module
 │   ├── query/
 │   │   └── ...                 # mirrored structure
@@ -117,12 +117,12 @@ morpheum
 ├── tx
 │   ├── bank send <to> <amount> --from <key>
 │   ├── auth approve-trading-key <agent> --max-usd 100000
-│   ├── agent-registry trigger-sync <agent-hash> --protocols erc8004,a2a
+│   ├── agentreg trigger-sync <agent-hash> --protocols erc8004,a2a
 │   ├── market create ...           # CLOB example
 │   └── ... (every module)
 ├── query
 │   ├── bank balance <address>
-│   ├── agent-registry agent-by-caip <caip>
+│   ├── agentreg agent-by-caip <caip>
 │   ├── auth nonce-state <address>
 │   └── ... 
 ├── agent
@@ -162,7 +162,7 @@ sequenceDiagram
     participant User
     participant CLI
     participant SDK
-    User->>CLI: morpheum query agent-registry ...
+    User->>CLI: morpheum query agentreg ...
     CLI->>SDK: AgentRegistryClient::query_agent_by_caip(...)
     SDK->>Node: gRPC (tonic)
     SDK-->>CLI: typed response (AgentRecord)
@@ -194,9 +194,9 @@ sequenceDiagram
 
 ### 8. Roadmap & Implementation Readiness
 
-**Phase 0 (Testnet 1 – 1 week)**: Core CLI skeleton + keys + bank + auth + agent-registry (tx + query).  
+**Phase 0 (Testnet 1 – 1 week)**: Core CLI skeleton + keys + bank + auth + agentreg (tx + query).  
 **Phase 1 (Testnet 2)**: Full module coverage + agent commands + rich output.  
 **Phase 2 (Mainnet)**: Ledger hardware + script mode + MCP gateway proxy commands.
 
 **The shared primitives, SDK, and signing crates are already production-ready.**  
-The CLI skeleton, macro system, config, keyring, and first three modules (`bank`, `auth`, `agent-registry`) are **ready to generate right now** in the exact professional format as your attached documents.
+The CLI skeleton, macro system, config, keyring, and first three modules (`bank`, `auth`, `agentreg`) are **ready to generate right now** in the exact professional format as your attached documents.

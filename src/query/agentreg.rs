@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Query commands for the `agent_registry` module.
+/// Query commands for the `agentreg` module.
 ///
 /// Read-only access to agent records, CAIP-10 resolution,
 /// protocol export status, and module parameters.
@@ -67,7 +67,7 @@ pub async fn execute(
 
 async fn query_record(args: RecordArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+    let client = morpheum_sdk_native::agentreg::AgentRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
@@ -84,7 +84,7 @@ async fn query_record(args: RecordArgs, dispatcher: &Dispatcher) -> Result<(), C
 
 async fn query_by_caip(args: ByCaipArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+    let client = morpheum_sdk_native::agentreg::AgentRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
@@ -104,7 +104,7 @@ async fn query_export_status(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+    let client = morpheum_sdk_native::agentreg::AgentRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
@@ -118,7 +118,7 @@ async fn query_export_status(
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::agent_registry::AgentRegistryClient::new(
+    let client = morpheum_sdk_native::agentreg::AgentRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );

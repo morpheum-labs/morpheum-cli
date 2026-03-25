@@ -1,11 +1,11 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::inference_registry::QuantFormat;
+use morpheum_sdk_native::inferreg::QuantFormat;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Query commands for the `inference_registry` module.
+/// Query commands for the `inferreg` module.
 ///
 /// Read-only access to on-chain model commitments, quantization format views,
 /// active model listings, and module parameters.
@@ -60,7 +60,7 @@ pub async fn execute(
 
 async fn query_model(args: ModelArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+    let client = morpheum_sdk_native::inferreg::InferenceRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
@@ -80,7 +80,7 @@ async fn query_models_by_quant(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+    let client = morpheum_sdk_native::inferreg::InferenceRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
@@ -92,7 +92,7 @@ async fn query_models_by_quant(
 
 async fn query_active_models(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+    let client = morpheum_sdk_native::inferreg::InferenceRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
@@ -104,7 +104,7 @@ async fn query_active_models(dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::inference_registry::InferenceRegistryClient::new(
+    let client = morpheum_sdk_native::inferreg::InferenceRegistryClient::new(
         dispatcher.sdk_config(),
         Box::new(transport),
     );
