@@ -12,6 +12,7 @@ mod query;
 #[cfg(feature = "_transport")]
 mod transport;
 mod utils;
+#[allow(dead_code, clippy::all, clippy::pedantic)]
 mod xchain;
 mod mwvm;
 mod mcp;

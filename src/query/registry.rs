@@ -71,11 +71,11 @@ struct RouteEntry {
 
 // ── Execution ──────────────────────────────────────────────────────
 
-pub async fn execute(cmd: RegistryQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
+pub fn execute(cmd: RegistryQueryCommands, dispatcher: &Dispatcher) -> Result<(), CliError> {
     match cmd {
-        RegistryQueryCommands::Chains => chains(&dispatcher),
-        RegistryQueryCommands::Tokens(args) => tokens(args, &dispatcher),
-        RegistryQueryCommands::Routes(args) => routes(args, &dispatcher),
+        RegistryQueryCommands::Chains => chains(dispatcher),
+        RegistryQueryCommands::Tokens(args) => tokens(&args, dispatcher),
+        RegistryQueryCommands::Routes(args) => routes(&args, dispatcher),
     }
 }
 
@@ -89,7 +89,7 @@ fn load_svm_registry() -> Result<SolanaChainRegistry, CliError> {
         .map_err(|e| CliError::chain("SVM", format!("load chain registry: {e}")))
 }
 
-fn derive_evm_actions(warp_route: &Option<String>) -> Vec<&'static str> {
+fn derive_evm_actions(warp_route: Option<&String>) -> Vec<&'static str> {
     if warp_route.is_some() {
         vec!["bank.deposit", "bank.withdraw"]
     } else {
@@ -97,7 +97,7 @@ fn derive_evm_actions(warp_route: &Option<String>) -> Vec<&'static str> {
     }
 }
 
-fn derive_svm_actions(warp_route: &Option<String>) -> Vec<&'static str> {
+fn derive_svm_actions(warp_route: Option<&String>) -> Vec<&'static str> {
     if warp_route.is_some() {
         vec!["bank.deposit", "bank.withdraw"]
     } else {
@@ -162,7 +162,7 @@ fn chains(dispatcher: &Dispatcher) -> Result<(), CliError> {
     Ok(())
 }
 
-fn tokens(args: TokensArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+fn tokens(args: &TokensArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let spec = ChainSpec::parse(&args.chain)?;
     let mut entries: Vec<TokenEntry> = Vec::new();
 
@@ -181,7 +181,7 @@ fn tokens(args: TokensArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
                     decimals: tok.decimals,
                     morpheum_asset_index: tok.morpheum_asset_index,
                     token_type: evm_token_type_label(&tok.token_type),
-                    actions: derive_evm_actions(&tok.morpheum_warp_route),
+                    actions: derive_evm_actions(tok.morpheum_warp_route.as_ref()),
                 });
             }
         }
@@ -199,7 +199,7 @@ fn tokens(args: TokensArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
                     decimals: tok.decimals,
                     morpheum_asset_index: tok.morpheum_asset_index,
                     token_type: svm_token_type_label(&tok.token_type),
-                    actions: derive_svm_actions(&tok.morpheum_warp_route),
+                    actions: derive_svm_actions(tok.morpheum_warp_route.as_ref()),
                 });
             }
         }
@@ -212,7 +212,7 @@ fn tokens(args: TokensArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     Ok(())
 }
 
-fn routes(args: RoutesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+fn routes(args: &RoutesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let upper = args.token.to_ascii_uppercase();
     let evm = load_evm_registry()?;
     let svm = load_svm_registry()?;
@@ -229,7 +229,7 @@ fn routes(args: RoutesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
                 vm: "evm",
                 decimals: tok.decimals,
                 morpheum_asset_index: tok.morpheum_asset_index,
-                actions: derive_evm_actions(&tok.morpheum_warp_route),
+                actions: derive_evm_actions(tok.morpheum_warp_route.as_ref()),
             });
         }
     }
@@ -244,7 +244,7 @@ fn routes(args: RoutesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
                 vm: "svm",
                 decimals: tok.decimals,
                 morpheum_asset_index: tok.morpheum_asset_index,
-                actions: derive_svm_actions(&tok.morpheum_warp_route),
+                actions: derive_svm_actions(tok.morpheum_warp_route.as_ref()),
             });
         }
     }

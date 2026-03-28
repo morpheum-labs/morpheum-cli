@@ -136,7 +136,7 @@ pub enum QueryCommands {
 #[allow(clippy::unused_async, unused_variables)]
 pub async fn execute(cmd: QueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
-        QueryCommands::Registry(sub) => registry::execute(sub, dispatcher).await,
+        QueryCommands::Registry(sub) => registry::execute(sub, &dispatcher),
         #[cfg(feature = "identity")]
         QueryCommands::Identity(sub) => identity::execute(sub, dispatcher).await,
         #[cfg(feature = "bank")]

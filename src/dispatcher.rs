@@ -22,6 +22,7 @@ impl Dispatcher {
     }
 
     /// Returns an `SdkConfig` derived from the CLI's current configuration.
+    #[cfg(feature = "_transport")]
     pub fn sdk_config(&self) -> morpheum_sdk_core::SdkConfig {
         morpheum_sdk_core::SdkConfig::new(
             self.config.rpc_url.clone(),
@@ -30,6 +31,7 @@ impl Dispatcher {
     }
 
     /// Creates a `GrpcTransport` connected to the configured RPC endpoint.
+    #[cfg(feature = "_transport")]
     pub async fn grpc_transport(&self) -> Result<morpheum_sdk_native::GrpcTransport, CliError> {
         morpheum_sdk_native::GrpcTransport::connect(&self.config.rpc_url)
             .await

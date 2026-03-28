@@ -79,8 +79,8 @@ pub struct ExportArgs {
 pub async fn execute(cmd: KeysCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         KeysCommands::Add(args) => add_key(args, &dispatcher),
-        KeysCommands::ImportEvm(args) => import_evm_key(args, &dispatcher),
-        KeysCommands::Show(args) => show_key(args, &dispatcher),
+        KeysCommands::ImportEvm(args) => import_evm_key(&args, &dispatcher),
+        KeysCommands::Show(args) => show_key(&args, &dispatcher),
         KeysCommands::List => list_keys(&dispatcher),
         KeysCommands::Delete(args) => delete_key(args, &dispatcher),
         KeysCommands::Export(args) => export_key(args, &dispatcher),
@@ -99,7 +99,7 @@ fn add_key(args: AddArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     Ok(())
 }
 
-fn import_evm_key(args: ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+fn import_evm_key(args: &ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let output = &dispatcher.output;
 
     let hex_str = args.private_key.strip_prefix("0x").unwrap_or(&args.private_key);
@@ -118,7 +118,7 @@ fn import_evm_key(args: ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), Cl
     Ok(())
 }
 
-fn show_key(args: ShowArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+fn show_key(args: &ShowArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let keyring = &dispatcher.keyring;
     let is_hex = keyring.is_hex_key(&args.name);
 

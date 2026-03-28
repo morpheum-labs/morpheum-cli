@@ -108,8 +108,6 @@ impl KeyringManager {
 
     /// Returns the EVM (0x-prefixed) address for a stored key.
     pub fn evm_address(&self, name: &str) -> Result<String, CliError> {
-        use morpheum_sdk_evm::alloy::signers::Signer;
-
         let signer = self.get_evm_signer(name)?;
         Ok(format!("{:#x}", signer.address()))
     }
