@@ -23,7 +23,7 @@ This split gives the **best of both worlds**: power for developers + intuitive U
 
 | Category                  | Prefix          | Example Commands                                      | Reason |
 |---------------------------|-----------------|-------------------------------------------------------|--------|
-| On-chain modules          | `tx` / `query`  | `morpheum tx job create ...`<br>`morpheum tx x402 pay ...`<br>`morpheum query job status ...` | Direct blockchain access |
+| On-chain modules          | `tx` / `query`  | `morpheum tx job create ...`<br>`morpheum tx x402 pay ...`<br>`morpheum tx x402 finalize-upto ...`<br>`morpheum tx bank set-spending-policy ...`<br>`morpheum query job status ...`<br>`morpheum query x402 pending-upto ...`<br>`morpheum query bank spending-policy ...` | Direct blockchain access |
 | Protocol layers           | Top-level       | `morpheum mcp call ...`<br>`morpheum a2a delegate ...`<br>`morpheum bridge send-proof ...`<br>`morpheum mwvm infer ...` | High-level gateways & developer tools |
 | Keys & Config             | Top-level       | `morpheum keys add ...`<br>`morpheum config` | Utility commands |
 
@@ -31,8 +31,10 @@ This split gives the **best of both worlds**: power for developers + intuitive U
 
 **x402** is **not** a full module like `job` or `identity`. It is a **payment primitive**.
 
-- **Explicit use**: `morpheum tx x402 pay ...` (standalone)
+- **Explicit use**: `morpheum tx x402 pay ...` (standalone), `morpheum tx x402 finalize-upto ...` (Upto settlement)
 - **Automatic use**: Triggered invisibly by other commands (MCP calls, A2A delegation, Job creation, Bridge exports, etc.) when a 402 response is received.
+- **Upto queries**: `morpheum query x402 pending-upto ...` to inspect pending pre-authorizations.
+- **Spending caps**: `morpheum tx bank set-spending-policy ...` and `morpheum query bank spending-policy ...` for per-agent spending limits.
 
 Example automatic flow:
 ```bash

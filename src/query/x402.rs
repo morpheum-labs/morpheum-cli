@@ -23,6 +23,9 @@ pub enum X402QueryCommands {
 
     /// Get the current x402 module parameters
     Params,
+
+    /// List pending Upto pre-authorizations for an agent
+    PendingUpto(PendingUptoArgs),
 }
 
 #[derive(Args)]
@@ -65,6 +68,21 @@ pub struct CapabilitiesArgs {
     pub agent_id: String,
 }
 
+#[derive(Args)]
+pub struct PendingUptoArgs {
+    /// Agent ID to query pending pre-authorizations for
+    #[arg(required = true)]
+    pub agent_id: String,
+
+    /// Filter by seller address
+    #[arg(long)]
+    pub seller_address: Option<String>,
+
+    /// Query a specific pre-authorization by ID
+    #[arg(long)]
+    pub pre_auth_id: Option<String>,
+}
+
 pub async fn execute(
     cmd: X402QueryCommands,
     dispatcher: Dispatcher,
@@ -75,6 +93,7 @@ pub async fn execute(
         X402QueryCommands::Policy(args) => query_policy(args, &dispatcher).await,
         X402QueryCommands::Capabilities(args) => query_capabilities(args, &dispatcher).await,
         X402QueryCommands::Params => query_params(&dispatcher).await,
+        X402QueryCommands::PendingUpto(args) => query_pending_upto(args, &dispatcher).await,
     }
 }
 
@@ -145,6 +164,31 @@ async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
         Box::new(transport),
     );
     let result = client.query_params().await?;
+    let json =
+        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    println!("{json}");
+    Ok(())
+}
+
+async fn query_pending_upto(
+    args: PendingUptoArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    let transport = dispatcher.grpc_transport().await?;
+    let client = morpheum_sdk_native::x402::X402Client::new(
+        dispatcher.sdk_config(),
+        Box::new(transport),
+    );
+
+    let mut req = morpheum_sdk_native::x402::QueryPendingUptoRequest::new(&args.agent_id);
+    if let Some(ref seller) = args.seller_address {
+        req = req.seller_address(seller);
+    }
+    if let Some(ref id) = args.pre_auth_id {
+        req = req.pre_auth_id(id);
+    }
+
+    let result = client.query_pending_upto(req).await?;
     let json =
         serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");

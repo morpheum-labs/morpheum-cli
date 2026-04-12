@@ -2,20 +2,19 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use morpheum_sdk_native::x402::{
     RegisterPolicyBuilder, UpdatePolicyBuilder, RotateAddressBuilder,
-    ApproveOutboundBuilder, SettleBridgePaymentBuilder, Policy, Scheme,
-    resolve_chain_name,
+    ApproveOutboundBuilder, FinalizeUptoBuilder, SettleBridgePaymentBuilder,
+    Policy, Scheme, resolve_chain_name,
 };
 use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Transaction commands for the x402 autonomous payment module.
+/// Transaction commands for the x402 external payment module.
 ///
-/// Manages spending policies, payment address rotation, outbound
+/// Manages service pricing policies, payment address rotation, outbound
 /// payment approval, and cross-chain x402 payment execution for AI agents
-/// using the x402 protocol (HTTP 402 + signed payment requests with
-/// TEE-attested settlement).
+/// using the x402 protocol (HTTP 402 + signed payment requests).
 #[derive(Subcommand)]
 pub enum X402Commands {
     /// Pay a Morpheum agent from an external chain (EVM/SVM)
@@ -35,6 +34,9 @@ pub enum X402Commands {
 
     /// Settle a cross-chain bridge payment (relay/operator)
     SettleBridgePayment(SettleBridgePaymentArgs),
+
+    /// Finalize an Upto usage-based payment (seller charges actual amount)
+    FinalizeUpto(FinalizeUptoArgs),
 }
 
 /// Supported chain types for x402 payment.
@@ -89,21 +91,21 @@ pub struct RegisterPolicyArgs {
     #[arg(long)]
     pub agent_id: String,
 
-    /// Maximum spend per service call in USD (micro-precision)
+    /// Maximum payment amount the service requires
     #[arg(long)]
-    pub max_per_service_usd: u64,
+    pub max_amount_required: u64,
 
-    /// Daily spending cap in USD
-    #[arg(long)]
-    pub daily_cap_usd: u64,
+    /// Bitflags of accepted payment schemes (1=exact, 2=exact_evm, 3=both)
+    #[arg(long, default_value = "3")]
+    pub supported_schemes: u64,
 
-    /// Hourly spending cap in USD
-    #[arg(long)]
-    pub hourly_cap_usd: u64,
+    /// Accepted asset (e.g., "USDC")
+    #[arg(long, default_value = "USDC")]
+    pub asset: String,
 
-    /// Reputation multiplier in basis points (10000 = 1x)
-    #[arg(long, default_value = "10000")]
-    pub reputation_multiplier_bps: u32,
+    /// CAIP-2 network identifier (e.g., "eip155:8453")
+    #[arg(long, default_value = "eip155:8453")]
+    pub network: String,
 
     /// Key name to sign with
     #[arg(long, default_value = "default")]
@@ -124,21 +126,21 @@ pub struct UpdatePolicyArgs {
     #[arg(long)]
     pub agent_id: String,
 
-    /// Maximum spend per service call in USD
+    /// Maximum payment amount the service requires
     #[arg(long)]
-    pub max_per_service_usd: u64,
+    pub max_amount_required: u64,
 
-    /// Daily spending cap in USD
-    #[arg(long)]
-    pub daily_cap_usd: u64,
+    /// Bitflags of accepted payment schemes
+    #[arg(long, default_value = "3")]
+    pub supported_schemes: u64,
 
-    /// Hourly spending cap in USD
-    #[arg(long)]
-    pub hourly_cap_usd: u64,
+    /// Accepted asset (e.g., "USDC")
+    #[arg(long, default_value = "USDC")]
+    pub asset: String,
 
-    /// Reputation multiplier in basis points (10000 = 1x)
-    #[arg(long, default_value = "10000")]
-    pub reputation_multiplier_bps: u32,
+    /// CAIP-2 network identifier
+    #[arg(long, default_value = "eip155:8453")]
+    pub network: String,
 
     /// Key name to sign with
     #[arg(long, default_value = "default")]
@@ -262,6 +264,29 @@ pub struct SettleBridgePaymentArgs {
     pub memo: Option<String>,
 }
 
+#[derive(Args)]
+pub struct FinalizeUptoArgs {
+    /// Seller address finalizing the pre-authorization
+    #[arg(long)]
+    pub seller_address: String,
+
+    /// Pre-authorization ID from the Upto pre-auth flow
+    #[arg(long)]
+    pub pre_auth_id: String,
+
+    /// Actual consumed amount in micro-units (must be <= pre-authorized max)
+    #[arg(long)]
+    pub actual_amount: u64,
+
+    /// Key name to sign with
+    #[arg(long, default_value = "default")]
+    pub from: String,
+
+    /// Optional memo
+    #[arg(long)]
+    pub memo: Option<String>,
+}
+
 pub async fn execute(cmd: X402Commands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         X402Commands::Pay(args) => pay(args, &dispatcher).await,
@@ -270,6 +295,7 @@ pub async fn execute(cmd: X402Commands, dispatcher: Dispatcher) -> Result<(), Cl
         X402Commands::RotateAddress(args) => rotate_address(args, &dispatcher).await,
         X402Commands::ApproveOutbound(args) => approve_outbound(args, &dispatcher).await,
         X402Commands::SettleBridgePayment(args) => settle_bridge_payment(args, &dispatcher).await,
+        X402Commands::FinalizeUpto(args) => finalize_upto(args, &dispatcher).await,
     }
 }
 
@@ -492,11 +518,12 @@ async fn register_policy(
     let policy = Policy {
         policy_id: String::new(),
         agent_id: args.agent_id.clone(),
-        max_per_service_usd: args.max_per_service_usd,
-        daily_cap_usd: args.daily_cap_usd,
-        hourly_cap_usd: args.hourly_cap_usd,
-        reputation_multiplier_bps: args.reputation_multiplier_bps,
+        max_amount_required: args.max_amount_required,
+        supported_schemes: args.supported_schemes,
+        asset: args.asset.clone(),
+        network: args.network.clone(),
         last_updated: 0,
+        upto_details: None,
     };
 
     let request = RegisterPolicyBuilder::new()
@@ -515,8 +542,8 @@ async fn register_policy(
     .await?;
 
     dispatcher.output.success(format!(
-        "x402 policy registered for agent {}\nDaily cap: ${}, Hourly cap: ${}\nTxHash: {}",
-        args.agent_id, args.daily_cap_usd, args.hourly_cap_usd, txhash,
+        "x402 policy registered for agent {}\nMax amount: {}, Asset: {}, Network: {}\nTxHash: {}",
+        args.agent_id, args.max_amount_required, args.asset, args.network, txhash,
     ));
 
     Ok(())
@@ -532,11 +559,12 @@ async fn update_policy(
     let updated_policy = Policy {
         policy_id: args.policy_id.clone(),
         agent_id: args.agent_id.clone(),
-        max_per_service_usd: args.max_per_service_usd,
-        daily_cap_usd: args.daily_cap_usd,
-        hourly_cap_usd: args.hourly_cap_usd,
-        reputation_multiplier_bps: args.reputation_multiplier_bps,
+        max_amount_required: args.max_amount_required,
+        supported_schemes: args.supported_schemes,
+        asset: args.asset.clone(),
+        network: args.network.clone(),
         last_updated: 0,
+        upto_details: None,
     };
 
     let request = UpdatePolicyBuilder::new()
@@ -734,8 +762,42 @@ fn parse_scheme(s: &str) -> Result<Scheme, String> {
         "exact" => Ok(Scheme::Exact),
         "exact-evm" | "evm" => Ok(Scheme::ExactEvm),
         "exact-svm" | "svm" => Ok(Scheme::ExactSvm),
+        "upto" => Ok(Scheme::Upto),
         other => Err(format!(
-            "unknown scheme '{other}'; expected: exact, exact-evm, exact-svm"
+            "unknown scheme '{other}'; expected: exact, exact-evm, exact-svm, upto"
         )),
     }
+}
+
+async fn finalize_upto(
+    args: FinalizeUptoArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
+
+    let request = FinalizeUptoBuilder::new()
+        .seller_address(&args.seller_address)
+        .pre_auth_id(&args.pre_auth_id)
+        .actual_amount(args.actual_amount)
+        .build()
+        .map_err(CliError::Sdk)?;
+
+    let txhash = crate::utils::sign_and_broadcast(
+        signer,
+        dispatcher,
+        request.to_any(),
+        args.memo,
+    )
+    .await?;
+
+    dispatcher.output.success(format!(
+        "Upto payment finalized\n\
+         Seller: {}\n\
+         Pre-auth ID: {}\n\
+         Actual amount: {}\n\
+         TxHash: {}",
+        args.seller_address, args.pre_auth_id, args.actual_amount, txhash,
+    ));
+
+    Ok(())
 }

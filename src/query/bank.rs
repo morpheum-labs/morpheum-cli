@@ -17,6 +17,9 @@ pub enum BankQueryCommands {
 
     /// List all registered assets in the on-chain asset registry
     Assets(AssetsArgs),
+
+    /// Get an agent's spending policy and current spend windows
+    SpendingPolicy(SpendingPolicyArgs),
 }
 
 #[derive(Args)]
@@ -50,11 +53,25 @@ pub struct AssetsArgs {
     pub type_filter: Option<i32>,
 }
 
+#[derive(Args)]
+pub struct SpendingPolicyArgs {
+    /// Agent ID to query spending policy for
+    #[arg(long)]
+    pub agent_id: String,
+
+    /// Asset index (0 = return all assets for agent)
+    #[arg(long, default_value = "0")]
+    pub asset_index: u64,
+}
+
 pub async fn execute(cmd: BankQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         BankQueryCommands::Balance(args) => balance(args, &dispatcher).await,
         BankQueryCommands::Balances(args) => balances(args, &dispatcher).await,
         BankQueryCommands::Assets(args) => query_assets(args, &dispatcher).await,
+        BankQueryCommands::SpendingPolicy(args) => {
+            query_spending_policy(args, &dispatcher).await
+        }
     }
 }
 
@@ -84,6 +101,20 @@ async fn balances(args: BalancesArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 async fn query_assets(args: AssetsArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let client = dispatcher.bank_client().await?;
     let result = client.query_assets(args.type_filter).await?;
+    let json = serde_json::to_string_pretty(&result)
+        .unwrap_or_else(|_| format!("{result:?}"));
+    println!("{json}");
+    Ok(())
+}
+
+async fn query_spending_policy(
+    args: SpendingPolicyArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    let client = dispatcher.bank_client().await?;
+    let result = client
+        .query_spending_policy(&args.agent_id, args.asset_index)
+        .await?;
     let json = serde_json::to_string_pretty(&result)
         .unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");

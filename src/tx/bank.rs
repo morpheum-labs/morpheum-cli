@@ -4,6 +4,7 @@ use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::bank::{
     TransferBuilder, TransferToBucketBuilder,
     MintBuilder, OnboardAssetBuilder,
+    SetSpendingPolicyBuilder,
 };
 
 use crate::dispatcher::Dispatcher;
@@ -33,6 +34,9 @@ pub enum BankCommands {
 
     /// Onboard a new asset type to the chain
     OnboardAsset(OnboardAssetArgs),
+
+    /// Set or update per-agent spending caps
+    SetSpendingPolicy(SetSpendingPolicyArgs),
 }
 
 // ── Send (local) ────────────────────────────────────────────────────
@@ -192,6 +196,35 @@ pub struct OnboardAssetArgs {
     pub from: String,
 }
 
+// ── SetSpendingPolicy ───────────────────────────────────────────────
+
+#[derive(Args)]
+pub struct SetSpendingPolicyArgs {
+    /// Agent ID to set the spending policy for
+    #[arg(long)]
+    pub agent_id: String,
+
+    /// Asset index for this policy
+    #[arg(long, default_value = "1")]
+    pub asset_index: u64,
+
+    /// Maximum daily spend in micro-units (0 = unlimited)
+    #[arg(long, default_value = "0")]
+    pub daily_cap: u64,
+
+    /// Maximum hourly spend in micro-units (0 = unlimited)
+    #[arg(long, default_value = "0")]
+    pub hourly_cap: u64,
+
+    /// Maximum per-transaction spend in micro-units (0 = unlimited)
+    #[arg(long, default_value = "0")]
+    pub per_tx_cap: u64,
+
+    /// Key name to sign with
+    #[arg(long, default_value = "default")]
+    pub from: String,
+}
+
 // ── Execute ─────────────────────────────────────────────────────────
 
 pub async fn execute(cmd: BankCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
@@ -205,6 +238,9 @@ pub async fn execute(cmd: BankCommands, dispatcher: Dispatcher) -> Result<(), Cl
         BankCommands::Mint(args) => mint(args, &dispatcher).await,
         BankCommands::OnboardAsset(args) => {
             onboard_asset(args, &dispatcher).await
+        }
+        BankCommands::SetSpendingPolicy(args) => {
+            set_spending_policy(args, &dispatcher).await
         }
     }
 }
@@ -486,6 +522,44 @@ async fn onboard_asset(
     dispatcher.output.success(format!(
         "Asset onboarded: {} ({})\nType: {}, Supply: {}\nTxHash: {}",
         args.name, args.symbol, args.asset_type, args.initial_supply, txhash,
+    ));
+
+    Ok(())
+}
+
+// ── SetSpendingPolicy ───────────────────────────────────────────────
+
+async fn set_spending_policy(
+    args: SetSpendingPolicyArgs,
+    dispatcher: &Dispatcher,
+) -> Result<(), CliError> {
+    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
+    let owner_address = hex::encode(signer.account_id().0);
+
+    let request = SetSpendingPolicyBuilder::new()
+        .owner_address(&owner_address)
+        .agent_id(&args.agent_id)
+        .asset_index(args.asset_index)
+        .daily_cap(args.daily_cap)
+        .hourly_cap(args.hourly_cap)
+        .per_tx_cap(args.per_tx_cap)
+        .build()
+        .map_err(CliError::Sdk)?;
+
+    let txhash = crate::utils::sign_and_broadcast(
+        signer,
+        dispatcher,
+        request.to_any(),
+        None,
+    )
+    .await?;
+
+    dispatcher.output.success(format!(
+        "Spending policy set for agent {}\n\
+         Asset: {}, Daily: {}, Hourly: {}, Per-tx: {}\n\
+         TxHash: {}",
+        args.agent_id, args.asset_index,
+        args.daily_cap, args.hourly_cap, args.per_tx_cap, txhash,
     ));
 
     Ok(())
