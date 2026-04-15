@@ -203,7 +203,7 @@ fn parse_fund(s: &str) -> Result<(&str, &str), CliError> {
     let (amount, denom) = s
         .split_once(':')
         .ok_or_else(|| CliError::invalid_input(
-            format!("invalid --funds format '{s}': expected 'amount:denom' (e.g. '1000000:umorm')"),
+            format!("invalid --funds format '{s}': expected 'amount:denom' (e.g. '1000000000000000000:oneir')"),
         ))?;
     if amount.is_empty() || denom.is_empty() {
         return Err(CliError::invalid_input(
