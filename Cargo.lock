@@ -1684,6 +1684,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "bls12_381_plus"
+version = "0.8.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1fa37cf2a8c96054d2dc3d708efe35cc0347014af0d30b86c736b4388ff8491c"
+dependencies = [
+ "arrayref",
+ "elliptic-curve",
+ "ff",
+ "group",
+ "hex",
+ "pairing",
+ "rand_core 0.6.4",
+ "serde",
+ "sha2 0.10.9",
+ "subtle",
+ "zeroize",
+]
+
+[[package]]
 name = "blst"
 version = "0.3.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3056,6 +3075,7 @@ version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c0b50bfb653653f9ca9095b427bed08ab8d75a137839d9ad64eb11810d5b6393"
 dependencies = [
+ "bitvec",
  "rand_core 0.6.4",
  "subtle",
 ]
@@ -4417,6 +4437,8 @@ dependencies = [
  "bech32",
  "bincode",
  "blake3",
+ "bls12_381_plus",
+ "bs58",
  "bytemuck",
  "bytes",
  "ed25519-dalek 2.2.0",
@@ -4424,13 +4446,18 @@ dependencies = [
  "k256",
  "morpheum-proto",
  "prost",
+ "rand_chacha 0.3.1",
+ "rand_core 0.6.4",
  "serde",
  "serde-big-array",
  "serde_json",
  "sha2 0.10.9",
  "sha3",
+ "siphasher 1.0.2",
  "thiserror 2.0.18",
  "uuid",
+ "vrf-r255",
+ "zeroize",
 ]
 
 [[package]]
@@ -4464,6 +4491,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "hex",
+ "morpheum-primitives",
  "morpheum-proto",
  "morpheum-sdk-core",
  "prost",
@@ -4482,6 +4510,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-bondingcurve"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-bucket"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
 name = "morpheum-sdk-cctp"
 version = "0.1.0"
 dependencies = [
@@ -4492,6 +4540,39 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "morpheum-sdk-clmm"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-clmmgrad"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-clob"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "hex",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+ "serde_json",
+ "sha3",
 ]
 
 [[package]]
@@ -4545,6 +4626,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-fundingrate"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
 name = "morpheum-sdk-gmp"
 version = "0.1.0"
 dependencies = [
@@ -4592,6 +4683,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-insurance"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
 name = "morpheum-sdk-intent"
 version = "0.1.0"
 dependencies = [
@@ -4625,6 +4726,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-kline"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-liquidity"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
 name = "morpheum-sdk-market"
 version = "0.1.0"
 dependencies = [
@@ -4644,6 +4765,16 @@ dependencies = [
  "morpheum-sdk-core",
  "prost",
  "serde",
+]
+
+[[package]]
+name = "morpheum-sdk-markprice"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
 ]
 
 [[package]]
@@ -4667,24 +4798,45 @@ dependencies = [
  "morpheum-sdk-agentreg",
  "morpheum-sdk-auth",
  "morpheum-sdk-bank",
+ "morpheum-sdk-bondingcurve",
+ "morpheum-sdk-bucket",
+ "morpheum-sdk-clmm",
+ "morpheum-sdk-clmmgrad",
+ "morpheum-sdk-clob",
  "morpheum-sdk-core",
  "morpheum-sdk-cosmwasm",
  "morpheum-sdk-directory",
  "morpheum-sdk-evm",
+ "morpheum-sdk-fundingrate",
  "morpheum-sdk-gmp",
  "morpheum-sdk-identity",
  "morpheum-sdk-inferreg",
+ "morpheum-sdk-insurance",
  "morpheum-sdk-intent",
  "morpheum-sdk-interop",
  "morpheum-sdk-job",
+ "morpheum-sdk-kline",
+ "morpheum-sdk-liquidity",
  "morpheum-sdk-market",
  "morpheum-sdk-marketplace",
+ "morpheum-sdk-markprice",
  "morpheum-sdk-memory",
+ "morpheum-sdk-osa",
+ "morpheum-sdk-outcomefeed",
+ "morpheum-sdk-position",
+ "morpheum-sdk-prediction",
+ "morpheum-sdk-pricefeed",
  "morpheum-sdk-reputation",
+ "morpheum-sdk-risk",
  "morpheum-sdk-staking",
  "morpheum-sdk-svm",
+ "morpheum-sdk-token",
+ "morpheum-sdk-treasury",
+ "morpheum-sdk-twap",
  "morpheum-sdk-validation",
+ "morpheum-sdk-vault",
  "morpheum-sdk-vc",
+ "morpheum-sdk-vesting",
  "morpheum-sdk-x402",
  "morpheum-signing-native",
  "prost",
@@ -4696,6 +4848,56 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-osa"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-outcomefeed"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-position"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-prediction"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-pricefeed"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
 name = "morpheum-sdk-reputation"
 version = "0.1.0"
 dependencies = [
@@ -4704,6 +4906,16 @@ dependencies = [
  "morpheum-sdk-core",
  "prost",
  "serde",
+]
+
+[[package]]
+name = "morpheum-sdk-risk"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
 ]
 
 [[package]]
@@ -4740,6 +4952,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "morpheum-sdk-token"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-treasury"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
+name = "morpheum-sdk-twap"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
+]
+
+[[package]]
 name = "morpheum-sdk-validation"
 version = "0.1.0"
 dependencies = [
@@ -4748,6 +4990,16 @@ dependencies = [
  "morpheum-sdk-core",
  "prost",
  "serde",
+]
+
+[[package]]
+name = "morpheum-sdk-vault"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
 ]
 
 [[package]]
@@ -4760,6 +5012,16 @@ dependencies = [
  "morpheum-sdk-core",
  "prost",
  "serde",
+]
+
+[[package]]
+name = "morpheum-sdk-vesting"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "morpheum-proto",
+ "morpheum-sdk-core",
+ "prost",
 ]
 
 [[package]]
@@ -5142,6 +5404,15 @@ dependencies = [
  "elliptic-curve",
  "primeorder",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "pairing"
+version = "0.23.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "81fec4625e73cf41ef4bb6846cafa6d44736525f442ba45e407c4a000a13996f"
+dependencies = [
+ "group",
 ]
 
 [[package]]
@@ -10411,6 +10682,18 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
+
+[[package]]
+name = "vrf-r255"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec2e7c083cc7b8fc3f6a4bc68f92af0e4ec0ec83b2d8a912eeced0aafa7a8379"
+dependencies = [
+ "curve25519-dalek 4.1.3",
+ "rand_core 0.6.4",
+ "sha2 0.10.9",
+ "subtle",
+]
 
 [[package]]
 name = "vte"
