@@ -1,8 +1,9 @@
-use clap::{Args, Subcommand};
+use clap::{Args, Subcommand, ValueEnum};
 
 use morpheum_sdk_native::intent::{
     SubmitIntentBuilder, CancelIntentBuilder,
-    ConditionalParams, TwapParams, DeclarativeParams,
+    Comparator, ConditionalParams, DeclarativeParams, OrderAction, Side, SliceCurve, Tif,
+    TriggerCondition, TwapParams,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -28,19 +29,93 @@ pub enum IntentCommands {
     Cancel(CancelArgs),
 }
 
+/// Order side for an execution-engine order or trigger action.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CliSide {
+    Buy,
+    Sell,
+}
+
+impl From<CliSide> for Side {
+    fn from(s: CliSide) -> Self {
+        match s {
+            CliSide::Buy => Side::Buy,
+            CliSide::Sell => Side::Sell,
+        }
+    }
+}
+
+/// Time-in-force for an execution-engine order.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CliTif {
+    Gtc,
+    Ioc,
+    Fok,
+}
+
+impl From<CliTif> for Tif {
+    fn from(t: CliTif) -> Self {
+        match t {
+            CliTif::Gtc => Tif::Gtc,
+            CliTif::Ioc => Tif::Ioc,
+            CliTif::Fok => Tif::Fok,
+        }
+    }
+}
+
+/// Comparator for a conditional trigger evaluated against the committed mark.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CliComparator {
+    Above,
+    Below,
+}
+
+impl From<CliComparator> for Comparator {
+    fn from(c: CliComparator) -> Self {
+        match c {
+            CliComparator::Above => Comparator::Above,
+            CliComparator::Below => Comparator::Below,
+        }
+    }
+}
+
 #[derive(Args)]
 pub struct SubmitConditionalArgs {
     /// Agent hash submitting the intent
     #[arg(long)]
     pub agent_hash: String,
 
-    /// Condition expression (e.g. "BTC/USD > 100000")
+    /// Market the committed-mark trigger watches
     #[arg(long)]
-    pub condition: String,
+    pub market_index: u64,
 
-    /// Action to execute when condition is met (e.g. "sell 1 BTC")
+    /// Comparator applied to the committed mark against `trigger_price_e8`
+    #[arg(long, value_enum)]
+    pub cmp: CliComparator,
+
+    /// Committed-mark trigger price (1e8 fixed-point decimal string)
     #[arg(long)]
-    pub action: String,
+    pub trigger_price_e8: String,
+
+    /// Bucket the action order trades against
+    #[arg(long)]
+    pub bucket_id: u64,
+
+    /// Side of the order to place when the trigger fires
+    #[arg(long, value_enum)]
+    pub side: CliSide,
+
+    /// Order quantity (1e8 satoshi-scale)
+    #[arg(long)]
+    pub quantity: u64,
+
+    /// Limit price for the action order (1e8 fixed-point decimal string)
+    #[arg(long)]
+    pub price_e8: String,
+
+    /// Time-in-force for the action order
+    #[arg(long, value_enum, default_value = "gtc")]
+    pub tif: CliTif,
 
     /// VC proof hash authorising this intent
     #[arg(long)]
@@ -65,9 +140,17 @@ pub struct SubmitTwapArgs {
     #[arg(long)]
     pub agent_hash: String,
 
-    /// Direction (buy or sell)
+    /// Market to execute the TWAP against
     #[arg(long)]
-    pub direction: String,
+    pub market_index: u64,
+
+    /// Bucket the TWAP slices trade against
+    #[arg(long)]
+    pub bucket_id: u64,
+
+    /// Direction (buy or sell)
+    #[arg(long, value_enum)]
+    pub side: CliSide,
 
     /// Total order size
     #[arg(long)]
@@ -81,9 +164,13 @@ pub struct SubmitTwapArgs {
     #[arg(long)]
     pub num_slices: u32,
 
-    /// Maximum slippage tolerance in basis points
-    #[arg(long, default_value = "50")]
-    pub slippage_bps: u32,
+    /// Time-in-force for each slice
+    #[arg(long, value_enum, default_value = "gtc")]
+    pub tif: CliTif,
+
+    /// Per-slice limit price (1e8 fixed-point decimal string)
+    #[arg(long)]
+    pub limit_price_e8: String,
 
     /// Key name to sign with
     #[arg(long, default_value = "default")]
@@ -157,8 +244,19 @@ async fn submit_conditional(
     let agent_sig = signer.public_key().to_proto_bytes();
 
     let params = ConditionalParams {
-        condition: args.condition.clone(),
-        action: args.action.clone(),
+        condition: TriggerCondition {
+            market_index: args.market_index,
+            cmp: args.cmp.into(),
+            trigger_price_e8: args.trigger_price_e8.clone(),
+        },
+        action: OrderAction {
+            market_index: args.market_index,
+            bucket_id: args.bucket_id,
+            side: args.side.into(),
+            quantity: args.quantity,
+            price_e8: args.price_e8.clone(),
+            tif: args.tif.into(),
+        },
     };
 
     let mut builder = SubmitIntentBuilder::new()
@@ -180,8 +278,9 @@ async fn submit_conditional(
     ).await?;
 
     dispatcher.output.success(format!(
-        "Conditional intent submitted\nCondition: {}\nAction: {}\nTxHash: {}",
-        args.condition, args.action, txhash,
+        "Conditional intent submitted\nTrigger: market={} {:?} {}\nAction: {:?} qty={} @ {}\nTxHash: {}",
+        args.market_index, args.cmp, args.trigger_price_e8,
+        args.side, args.quantity, args.price_e8, txhash,
     ));
 
     Ok(())
@@ -192,13 +291,15 @@ async fn submit_twap(args: SubmitTwapArgs, dispatcher: &Dispatcher) -> Result<()
     let agent_sig = signer.public_key().to_proto_bytes();
 
     let params = TwapParams {
-        direction: args.direction.clone(),
+        market_index: args.market_index,
+        bucket_id: args.bucket_id,
+        side: args.side.into(),
         total_size: args.total_size,
-        duration_ms: args.duration_ms,
         num_slices: args.num_slices,
-        slice_curve: String::new(),
-        slippage_tolerance_bps: args.slippage_bps,
-        rebalance_trigger: String::new(),
+        duration_ms: args.duration_ms,
+        curve: SliceCurve::Uniform,
+        tif: args.tif.into(),
+        limit_price_e8: args.limit_price_e8.clone(),
     };
 
     let request = SubmitIntentBuilder::new()
@@ -212,8 +313,8 @@ async fn submit_twap(args: SubmitTwapArgs, dispatcher: &Dispatcher) -> Result<()
     ).await?;
 
     dispatcher.output.success(format!(
-        "TWAP intent submitted\n{} {} over {}ms in {} slices\nTxHash: {}",
-        args.direction, args.total_size, args.duration_ms, args.num_slices, txhash,
+        "TWAP intent submitted\n{:?} {} over {}ms in {} slices @ {}\nTxHash: {}",
+        args.side, args.total_size, args.duration_ms, args.num_slices, args.limit_price_e8, txhash,
     ));
 
     Ok(())
