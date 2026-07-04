@@ -64,6 +64,12 @@ pub struct CreateArgs {
     #[arg(long)]
     pub vc_proof: Option<String>,
 
+    /// ARS v3 evaluation-fee track (USD) escrowed on top of the budget and paid
+    /// to the evaluator on both completion and rejection. Zero (the default)
+    /// inherits the governance `default_evaluation_fee_usd`.
+    #[arg(long, default_value_t = 0)]
+    pub evaluation_fee_usd: u64,
+
     /// Key name to sign with (client key)
     #[arg(long, default_value = "default")]
     pub from: String,
@@ -188,6 +194,7 @@ async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
         .client_agent_hash(&client_hash)
         .evaluator_agent_hash(&args.evaluator_hash)
         .budget_usd(args.budget_usd)
+        .evaluation_fee_usd(args.evaluation_fee_usd)
         .expiry_timestamp(args.expiry);
 
     if let Some(ref provider) = args.provider_hash {
