@@ -4,7 +4,7 @@ use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::job::{
     CreateJobBuilder, FundJobBuilder, SubmitDeliverableBuilder, AttestBuilder,
     ClaimRefundBuilder, SetProviderBuilder, CancelJobBuilder,
-    Deliverable,
+    CompensationPolicy, Deliverable,
 };
 
 use crate::dispatcher::Dispatcher;
@@ -69,6 +69,14 @@ pub struct CreateArgs {
     /// inherits the governance `default_evaluation_fee_usd`.
     #[arg(long, default_value_t = 0)]
     pub evaluation_fee_usd: u64,
+
+    /// ARS v6 self-funded coverage: the claim (USD) reimbursed to the client on
+    /// a covered rejection. Non-zero requires governance to have coverage
+    /// enabled; it selects the `CoverageReimbursed` policy and escrows a premium
+    /// (`coverage * rate`) on top of the budget + fee. Zero (default) disables
+    /// coverage.
+    #[arg(long, default_value_t = 0)]
+    pub coverage_amount_usd: u64,
 
     /// Key name to sign with (client key)
     #[arg(long, default_value = "default")]
@@ -205,6 +213,13 @@ async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
     }
     if let Some(ref vc) = args.vc_proof {
         builder = builder.vc_proof_hash(vc);
+    }
+    // ARS v6: requesting coverage selects the CoverageReimbursed policy (the
+    // only policy under which the escrowed premium can ever be claimed).
+    if args.coverage_amount_usd > 0 {
+        builder = builder
+            .coverage_amount_usd(args.coverage_amount_usd)
+            .compensation_policy(CompensationPolicy::CoverageReimbursed);
     }
 
     let request = builder.build().map_err(CliError::Sdk)?;
