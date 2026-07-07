@@ -1,7 +1,7 @@
-use clap::{Args, Subcommand};
-use serde::Serialize;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use clap::{Args, Subcommand};
+use serde::Serialize;
 
 /// MCP (Model Context Protocol) commands.
 ///
@@ -81,7 +81,11 @@ fn call_tool(args: CallArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         "Calling tool '{}' on agent {} {}",
         args.tool,
         args.agent,
-        if args.local { "(local mwvm simulation)" } else { "(via MCP gateway)" }
+        if args.local {
+            "(local mwvm simulation)"
+        } else {
+            "(via MCP gateway)"
+        }
     ));
 
     // In production this would call the MCP gateway client from the SDK
@@ -102,14 +106,25 @@ fn list_tools(args: ListToolsArgs, dispatcher: &Dispatcher) -> Result<(), CliErr
     output.info(format!(
         "Listing available tools for agent {} {}",
         args.agent,
-        if args.local { "(local mwvm simulation)" } else { "(via MCP gateway)" }
+        if args.local {
+            "(local mwvm simulation)"
+        } else {
+            "(via MCP gateway)"
+        }
     ));
 
     // Placeholder output structure (real SDK call would return typed tools)
     // In production this would use sdk.mcp().list_tools(...)
     let tools = ["search", "analyze", "trade", "get_balance", "vector_search"];
 
-    output.print_list(&tools.iter().map(|t| ToolInfo { name: (*t).to_string() }).collect::<Vec<_>>())?;
+    output.print_list(
+        &tools
+            .iter()
+            .map(|t| ToolInfo {
+                name: (*t).to_string(),
+            })
+            .collect::<Vec<_>>(),
+    )?;
 
     Ok(())
 }

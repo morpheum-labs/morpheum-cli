@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
-use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::agentreg::TriggerProtocolSyncBuilder;
+use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -36,10 +36,7 @@ pub struct TriggerSyncArgs {
     pub memo: Option<String>,
 }
 
-pub async fn execute(
-    cmd: AgentRegistryCommands,
-    dispatcher: Dispatcher,
-) -> Result<(), CliError> {
+pub async fn execute(cmd: AgentRegistryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         AgentRegistryCommands::TriggerSync(args) => trigger_sync(args, &dispatcher).await,
     }
@@ -56,11 +53,11 @@ async fn trigger_sync(args: TriggerSyncArgs, dispatcher: &Dispatcher) -> Result<
         .authority(&authority)
         .agent_hash(agent_hash_bytes)
         .protocols(args.protocols.clone())
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Protocol sync triggered for agent {}\nProtocols: {}\nTxHash: {}",

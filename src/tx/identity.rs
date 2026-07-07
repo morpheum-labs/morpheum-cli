@@ -1,8 +1,6 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::identity::{
-    AgentMetadataCardInput, Capability, RegisterAgentBuilder,
-};
+use morpheum_sdk_native::identity::{AgentMetadataCardInput, Capability, RegisterAgentBuilder};
 use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
@@ -76,13 +74,7 @@ async fn register(args: RegisterArgs, dispatcher: Dispatcher) -> Result<(), CliE
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = sign_and_broadcast(
-        signer,
-        &dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash = sign_and_broadcast(signer, &dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Agent registered!\nDID: {}\nTxHash: {txhash}",

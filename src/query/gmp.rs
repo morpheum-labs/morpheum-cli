@@ -33,26 +33,20 @@ pub async fn execute(cmd: GmpQueryCommands, dispatcher: Dispatcher) -> Result<()
 
 async fn params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::gmp::GmpClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::gmp::GmpClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_params().await?;
-    let json =
-        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn protocols(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::gmp::GmpClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::gmp::GmpClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_protocols().await?;
-    let json =
-        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -65,10 +59,8 @@ async fn delivery(args: DeliveryArgs, dispatcher: &Dispatcher) -> Result<(), Cli
         .to_string();
 
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::gmp::GmpClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::gmp::GmpClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_hyperlane_delivery(&message_id).await?;
 
     let status = if result.delivered {

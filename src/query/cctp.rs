@@ -69,7 +69,9 @@ pub async fn execute(cmd: CctpQueryCommands, dispatcher: Dispatcher) -> Result<(
     }
 }
 
-async fn cctp_client(dispatcher: &Dispatcher) -> Result<morpheum_sdk_cosmwasm::CosmWasmClient, CliError> {
+async fn cctp_client(
+    dispatcher: &Dispatcher,
+) -> Result<morpheum_sdk_cosmwasm::CosmWasmClient, CliError> {
     let transport = dispatcher.grpc_transport().await?;
     Ok(morpheum_sdk_cosmwasm::CosmWasmClient::new(
         dispatcher.sdk_config(),
@@ -83,8 +85,7 @@ async fn config(args: CctpConfigArgs, dispatcher: &Dispatcher) -> Result<(), Cli
         .await
         .map_err(|e| CliError::Sdk(e.into()))?;
 
-    let json = serde_json::to_string_pretty(&resp)
-        .unwrap_or_else(|_| format!("{resp:?}"));
+    let json = serde_json::to_string_pretty(&resp).unwrap_or_else(|_| format!("{resp:?}"));
     println!("{json}");
     Ok(())
 }
@@ -98,8 +99,8 @@ async fn pending(args: CctpPendingArgs, dispatcher: &Dispatcher) -> Result<(), C
     if transfers.is_empty() {
         println!("No pending transfers.");
     } else {
-        let json = serde_json::to_string_pretty(&transfers)
-            .unwrap_or_else(|_| format!("{:?}", transfers));
+        let json =
+            serde_json::to_string_pretty(&transfers).unwrap_or_else(|_| format!("{:?}", transfers));
         println!("{json}");
     }
     Ok(())
@@ -121,8 +122,8 @@ async fn pending_by_nonce(
 
     match transfer {
         Some(transfer) => {
-            let json = serde_json::to_string_pretty(&transfer)
-                .unwrap_or_else(|_| format!("{transfer:?}"));
+            let json =
+                serde_json::to_string_pretty(&transfer).unwrap_or_else(|_| format!("{transfer:?}"));
             println!("{json}");
         }
         None => {
@@ -144,8 +145,8 @@ async fn routes(args: CctpRoutesArgs, dispatcher: &Dispatcher) -> Result<(), Cli
     if routes.is_empty() {
         println!("No routes enrolled.");
     } else {
-        let json = serde_json::to_string_pretty(&routes)
-            .unwrap_or_else(|_| format!("{:?}", routes));
+        let json =
+            serde_json::to_string_pretty(&routes).unwrap_or_else(|_| format!("{:?}", routes));
         println!("{json}");
     }
     Ok(())

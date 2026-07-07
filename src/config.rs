@@ -53,15 +53,13 @@ impl MorpheumConfig {
     /// Loads configuration from the standard location.
     /// If the file does not exist, returns `Default` values.
     pub fn load() -> Result<Self, CliError> {
-        let config: MorpheumConfig = confy::load("morpheum", None)
-            .map_err(CliError::Config)?;
+        let config: MorpheumConfig = confy::load("morpheum", None).map_err(CliError::Config)?;
         Ok(config)
     }
 
     /// Saves the current configuration back to disk.
     pub fn save(&self) -> Result<(), CliError> {
-        confy::store("morpheum", None, self)
-            .map_err(CliError::Config)?;
+        confy::store("morpheum", None, self).map_err(CliError::Config)?;
         Ok(())
     }
 
@@ -128,8 +126,14 @@ pub async fn execute(cmd: ConfigCommands, dispatcher: Dispatcher) -> Result<(), 
         ConfigCommands::Show => {
             output.info(format!("chain_id:        {}", dispatcher.config.chain_id));
             output.info(format!("rpc_url:         {}", dispatcher.config.rpc_url));
-            output.info(format!("timeout_secs:    {}", dispatcher.config.timeout_secs));
-            output.info(format!("keyring_backend: {}", dispatcher.config.keyring_backend));
+            output.info(format!(
+                "timeout_secs:    {}",
+                dispatcher.config.timeout_secs
+            ));
+            output.info(format!(
+                "keyring_backend: {}",
+                dispatcher.config.keyring_backend
+            ));
             output.info(format!(
                 "default_output:  {:?}",
                 dispatcher.config.default_output

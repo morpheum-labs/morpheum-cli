@@ -1,6 +1,6 @@
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_native::vc::{VcIssueBuilder, VcRevokeBuilder, VcSelfRevokeBuilder, VcClaims};
+use morpheum_sdk_native::vc::{VcClaims, VcIssueBuilder, VcRevokeBuilder, VcSelfRevokeBuilder};
 use morpheum_sdk_native::AccountId;
 use morpheum_signing_native::signer::Signer;
 
@@ -142,9 +142,8 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "VC issued to {}\nMax daily: ${}, Max position: ${}\nTxHash: {}",
@@ -170,13 +169,12 @@ async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
-    dispatcher.output.success(format!(
-        "VC {} revoked\nTxHash: {}", args.vc_id, txhash,
-    ));
+    dispatcher
+        .output
+        .success(format!("VC {} revoked\nTxHash: {}", args.vc_id, txhash,));
 
     Ok(())
 }
@@ -195,21 +193,20 @@ async fn self_revoke(args: SelfRevokeArgs, dispatcher: &Dispatcher) -> Result<()
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
-        "VC {} self-revoked\nTxHash: {}", args.vc_id, txhash,
+        "VC {} self-revoked\nTxHash: {}",
+        args.vc_id, txhash,
     ));
 
     Ok(())
 }
 
 fn parse_account_id(hex_str: &str) -> Result<AccountId, CliError> {
-    let bytes = hex::decode(hex_str).map_err(|e| {
-        CliError::invalid_input(format!("invalid hex for account ID: {e}"))
-    })?;
+    let bytes = hex::decode(hex_str)
+        .map_err(|e| CliError::invalid_input(format!("invalid hex for account ID: {e}")))?;
     let arr: [u8; 32] = bytes.try_into().map_err(|_| {
         CliError::invalid_input("account ID must be exactly 32 bytes (64 hex chars)")
     })?;

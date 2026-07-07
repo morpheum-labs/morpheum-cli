@@ -60,10 +60,7 @@ pub enum CliError {
         code(morpheum::cli::chain),
         help("Check RPC URL, contract/program addresses, and account balances")
     )]
-    Chain {
-        vm: &'static str,
-        message: String,
-    },
+    Chain { vm: &'static str, message: String },
 
     #[error("Internal error: {0}")]
     #[diagnostic(code(morpheum::cli::internal))]
@@ -84,7 +81,10 @@ impl CliError {
     }
 
     pub fn chain(vm: &'static str, message: impl Into<String>) -> Self {
-        Self::Chain { vm, message: message.into() }
+        Self::Chain {
+            vm,
+            message: message.into(),
+        }
     }
 
     #[allow(dead_code)]

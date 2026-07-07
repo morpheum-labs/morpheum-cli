@@ -45,8 +45,7 @@ impl KeyringManager {
     /// Retrieves a `NativeSigner` by key name.
     pub fn get_native_signer(&self, name: &str) -> Result<NativeSigner, CliError> {
         let mnemonic = self.load_secret(name)?;
-        NativeSigner::from_mnemonic(mnemonic.expose_secret(), "")
-            .map_err(CliError::Signing)
+        NativeSigner::from_mnemonic(mnemonic.expose_secret(), "").map_err(CliError::Signing)
     }
 
     /// Derives an alloy `PrivateKeySigner` from the stored secret.
@@ -70,13 +69,15 @@ impl KeyringManager {
                 .map_err(|e| CliError::chain("EVM", format!("invalid hex private key: {e}")))?
                 .try_into()
                 .map_err(|v: Vec<u8>| {
-                    CliError::chain("EVM", format!("private key must be 32 bytes, got {}", v.len()))
+                    CliError::chain(
+                        "EVM",
+                        format!("private key must be 32 bytes, got {}", v.len()),
+                    )
                 })?;
             PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
                 .map_err(|e| CliError::chain("EVM", format!("failed to create EVM signer: {e}")))
         } else {
-            let evm = EvmSigner::from_mnemonic(raw, "")
-                .map_err(CliError::Signing)?;
+            let evm = EvmSigner::from_mnemonic(raw, "").map_err(CliError::Signing)?;
             let key_bytes = evm.private_key_bytes();
             PrivateKeySigner::from_bytes(&FixedBytes::from(key_bytes))
                 .map_err(|e| CliError::chain("EVM", format!("failed to create EVM signer: {e}")))
@@ -95,7 +96,9 @@ impl KeyringManager {
         use morpheum_signing_native::signer::Signer;
         let native = self.get_native_signer(name)?;
         let acct = native.account_id().0;
-        Ok(morpheum_primitives::address::encode_address(&acct[acct.len() - 20..]))
+        Ok(morpheum_primitives::address::encode_address(
+            &acct[acct.len() - 20..],
+        ))
     }
 
     /// Returns `true` if the stored secret is a raw hex private key rather
@@ -119,8 +122,7 @@ impl KeyringManager {
     /// and Solana.
     pub fn get_solana_signer(&self, name: &str) -> Result<SolanaSigner, CliError> {
         let mnemonic = self.load_secret(name)?;
-        SolanaSigner::from_mnemonic(mnemonic.expose_secret(), "")
-            .map_err(CliError::Signing)
+        SolanaSigner::from_mnemonic(mnemonic.expose_secret(), "").map_err(CliError::Signing)
     }
 
     /// Returns the Base58-encoded Solana address for a stored key.
@@ -158,8 +160,7 @@ impl KeyringManager {
 
     /// Deletes a key by name from both OS keyring and file fallback.
     pub fn delete_key(&self, name: &str) {
-        let _ = keyring::Entry::new("morpheum", name)
-            .and_then(|e| e.delete_credential());
+        let _ = keyring::Entry::new("morpheum", name).and_then(|e| e.delete_credential());
 
         let _ = fs::remove_file(self.key_dir.join(name));
     }

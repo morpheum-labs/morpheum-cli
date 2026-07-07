@@ -183,9 +183,7 @@ impl<'a> CrossChainExecutor<'a> {
 
         let (mut chain, token) = registry
             .resolve(chain_name, token_symbol)
-            .map_err(|e| {
-                CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}"))
-            })?;
+            .map_err(|e| CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}")))?;
 
         if let Some(rpc) = rpc_override {
             chain.rpc_url = rpc.to_string();
@@ -194,9 +192,7 @@ impl<'a> CrossChainExecutor<'a> {
         let collateral = token.collateral_contract.ok_or_else(|| {
             CliError::chain(
                 "EVM",
-                format!(
-                    "no collateral contract configured for {token_symbol} on {chain_name}"
-                ),
+                format!("no collateral contract configured for {token_symbol} on {chain_name}"),
             )
         })?;
 
@@ -207,8 +203,7 @@ impl<'a> CrossChainExecutor<'a> {
             "{:#x}",
             morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer)
         );
-        let recipient_bytes =
-            resolve_recipient(recipient, from_key, self.keyring, true)?;
+        let recipient_bytes = resolve_recipient(recipient, from_key, self.keyring, true)?;
 
         let provider = morpheum_sdk_evm::build_provider(&chain.rpc_url, alloy_signer)
             .map_err(|e| CliError::chain("EVM", format!("provider: {e}")))?;
@@ -238,9 +233,7 @@ impl<'a> CrossChainExecutor<'a> {
                     amount,
                 )
                 .await
-                .map_err(|e| {
-                    CliError::chain("EVM", format!("transferRemote native: {e}"))
-                })?;
+                .map_err(|e| CliError::chain("EVM", format!("transferRemote native: {e}")))?;
 
                 Ok(EvmDepositResult {
                     tx_hash: format!("{:#x}", result.tx_hash),
@@ -267,14 +260,10 @@ impl<'a> CrossChainExecutor<'a> {
                 ));
 
                 self.output.info("Approving ERC-20 spend...");
-                let approve_hash = morpheum_sdk_evm::approve_erc20(
-                    &provider,
-                    token.address,
-                    collateral,
-                    amount,
-                )
-                .await
-                .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
+                let approve_hash =
+                    morpheum_sdk_evm::approve_erc20(&provider, token.address, collateral, amount)
+                        .await
+                        .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
                 self.output
                     .info(format!("Approval confirmed: {approve_hash:#x}"));
 
@@ -287,9 +276,7 @@ impl<'a> CrossChainExecutor<'a> {
                     amount,
                 )
                 .await
-                .map_err(|e| {
-                    CliError::chain("EVM", format!("quoteDispatch: {e}"))
-                })?;
+                .map_err(|e| CliError::chain("EVM", format!("quoteDispatch: {e}")))?;
                 self.output.info(format!("Dispatch fee: {fee}"));
 
                 self.output.info("Calling transferRemote...");
@@ -302,9 +289,7 @@ impl<'a> CrossChainExecutor<'a> {
                     fee,
                 )
                 .await
-                .map_err(|e| {
-                    CliError::chain("EVM", format!("transferRemote: {e}"))
-                })?;
+                .map_err(|e| CliError::chain("EVM", format!("transferRemote: {e}")))?;
 
                 Ok(EvmDepositResult {
                     tx_hash: format!("{:#x}", result.tx_hash),
@@ -336,9 +321,7 @@ impl<'a> CrossChainExecutor<'a> {
 
         let (mut chain, token) = registry
             .resolve(chain_name, token_symbol)
-            .map_err(|e| {
-                CliError::chain("SVM", format!("resolving chain '{chain_name}': {e}"))
-            })?;
+            .map_err(|e| CliError::chain("SVM", format!("resolving chain '{chain_name}': {e}")))?;
 
         if let Some(rpc) = rpc_override {
             chain.rpc_url = rpc.to_string();
@@ -354,10 +337,8 @@ impl<'a> CrossChainExecutor<'a> {
         let amount = parse_svm_amount(amount_str, token.decimals)?;
 
         let solana_signer = self.keyring.get_solana_signer(from_key)?;
-        let from_address =
-            bs58::encode(solana_signer.public_key_bytes()).into_string();
-        let recipient_bytes =
-            resolve_recipient(recipient, from_key, self.keyring, false)?;
+        let from_address = bs58::encode(solana_signer.public_key_bytes()).into_string();
+        let recipient_bytes = resolve_recipient(recipient, from_key, self.keyring, false)?;
 
         let mut keypair_bytes = [0u8; 64];
         keypair_bytes[..32].copy_from_slice(&solana_signer.private_key_bytes());
@@ -365,22 +346,20 @@ impl<'a> CrossChainExecutor<'a> {
         let keypair = Keypair::try_from(keypair_bytes.as_slice())
             .map_err(|e| CliError::chain("SVM", format!("keypair: {e}")))?;
 
-        let provider =
-            morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)
-                .map_err(|e| CliError::chain("SVM", format!("provider: {e}")))?;
+        let provider = morpheum_sdk_svm::provider::build_provider(&chain.rpc_url, keypair)
+            .map_err(|e| CliError::chain("SVM", format!("provider: {e}")))?;
 
         match token.token_type {
             SvmTokenType::Native => {
-                let warp_route =
-                    chain.native_warp_route_program.ok_or_else(|| {
-                        CliError::chain(
-                            "SVM",
-                            format!(
-                                "no native_warp_route_program configured for \
+                let warp_route = chain.native_warp_route_program.ok_or_else(|| {
+                    CliError::chain(
+                        "SVM",
+                        format!(
+                            "no native_warp_route_program configured for \
                                  {chain_name}"
-                            ),
-                        )
-                    })?;
+                        ),
+                    )
+                })?;
 
                 self.output.info(format!(
                     "SVM deposit (native)\n\
@@ -404,9 +383,7 @@ impl<'a> CrossChainExecutor<'a> {
                     recipient_bytes,
                     amount,
                 )
-                .map_err(|e| {
-                    CliError::chain("SVM", format!("transfer_remote_native: {e}"))
-                })?;
+                .map_err(|e| CliError::chain("SVM", format!("transfer_remote_native: {e}")))?;
 
                 Ok(SvmDepositResult {
                     signature: result.signature.to_string(),
@@ -421,9 +398,7 @@ impl<'a> CrossChainExecutor<'a> {
                 let warp_route = chain.warp_route_program.ok_or_else(|| {
                     CliError::chain(
                         "SVM",
-                        format!(
-                            "no warp_route_program configured for {chain_name}"
-                        ),
+                        format!("no warp_route_program configured for {chain_name}"),
                     )
                 })?;
 
@@ -451,9 +426,7 @@ impl<'a> CrossChainExecutor<'a> {
                     recipient_bytes,
                     amount,
                 )
-                .map_err(|e| {
-                    CliError::chain("SVM", format!("transfer_remote: {e}"))
-                })?;
+                .map_err(|e| CliError::chain("SVM", format!("transfer_remote: {e}")))?;
 
                 Ok(SvmDepositResult {
                     signature: result.signature.to_string(),
@@ -481,9 +454,8 @@ pub fn resolve_recipient(
     let raw = match explicit {
         Some(hex_str) => {
             let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-            hex::decode(s).map_err(|e| {
-                CliError::invalid_input(format!("invalid recipient hex: {e}"))
-            })?
+            hex::decode(s)
+                .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
         }
         None => {
             use morpheum_signing_native::signer::Signer;
@@ -498,9 +470,7 @@ pub fn resolve_recipient(
     } else if raw.len() == 20 && allow_20_byte {
         fixed[12..].copy_from_slice(&raw);
     } else if allow_20_byte {
-        return Err(CliError::invalid_input(
-            "recipient must be 20 or 32 bytes",
-        ));
+        return Err(CliError::invalid_input("recipient must be 20 or 32 bytes"));
     } else {
         return Err(CliError::invalid_input(
             "recipient must be exactly 32 bytes",
@@ -511,10 +481,7 @@ pub fn resolve_recipient(
 
 /// Parses a human-readable amount to an on-chain `U256` using the token's
 /// decimal precision (e.g. 6 decimals: `"100"` -> `100_000_000`).
-pub fn parse_token_amount(
-    amount_str: &str,
-    decimals: u8,
-) -> Result<U256, CliError> {
+pub fn parse_token_amount(amount_str: &str, decimals: u8) -> Result<U256, CliError> {
     let parts: Vec<&str> = amount_str.split('.').collect();
     let (whole, frac) = match parts.len() {
         1 => (parts[0], ""),
@@ -537,9 +504,8 @@ pub fn parse_token_amount(
     let frac_val: u128 = if frac.is_empty() {
         0
     } else {
-        frac.parse().map_err(|e| {
-            CliError::invalid_input(format!("invalid fractional part: {e}"))
-        })?
+        frac.parse()
+            .map_err(|e| CliError::invalid_input(format!("invalid fractional part: {e}")))?
     };
 
     let scale = 10u128.pow(decimals as u32);
@@ -550,10 +516,7 @@ pub fn parse_token_amount(
 }
 
 /// Parses a human-readable amount to a raw `u64` for SVM chains.
-pub fn parse_svm_amount(
-    amount_str: &str,
-    decimals: u8,
-) -> Result<u64, CliError> {
+pub fn parse_svm_amount(amount_str: &str, decimals: u8) -> Result<u64, CliError> {
     let parts: Vec<&str> = amount_str.split('.').collect();
     let (whole, frac) = match parts.len() {
         1 => (parts[0], ""),
@@ -576,9 +539,8 @@ pub fn parse_svm_amount(
     let frac_val: u64 = if frac.is_empty() {
         0
     } else {
-        frac.parse().map_err(|e| {
-            CliError::invalid_input(format!("invalid fractional part: {e}"))
-        })?
+        frac.parse()
+            .map_err(|e| CliError::invalid_input(format!("invalid fractional part: {e}")))?
     };
 
     let scale = 10u64.pow(decimals as u32);
@@ -601,10 +563,8 @@ pub fn resolve_warp_target(
 ) -> Result<(String, u32), CliError> {
     match chain_type {
         ChainType::Evm => {
-            let registry = ChainRegistry::load_with_defaults(
-                morpheum_sdk_evm::DEFAULT_CHAINS_TOML,
-            )
-            .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
+            let registry = ChainRegistry::load_with_defaults(morpheum_sdk_evm::DEFAULT_CHAINS_TOML)
+                .map_err(|e| CliError::chain("EVM", format!("chain registry: {e}")))?;
             let (chain, token) = registry
                 .resolve(chain_name, token_symbol)
                 .map_err(|e| CliError::chain("EVM", format!("{e}")))?;
@@ -620,10 +580,9 @@ pub fn resolve_warp_target(
             Ok((warp, explicit_domain.unwrap_or(chain.hyperlane_domain)))
         }
         ChainType::Svm => {
-            let registry = SolanaChainRegistry::load_with_defaults(
-                morpheum_sdk_svm::DEFAULT_CHAINS_TOML,
-            )
-            .map_err(|e| CliError::chain("SVM", format!("chain registry: {e}")))?;
+            let registry =
+                SolanaChainRegistry::load_with_defaults(morpheum_sdk_svm::DEFAULT_CHAINS_TOML)
+                    .map_err(|e| CliError::chain("SVM", format!("chain registry: {e}")))?;
             let (chain, token) = registry
                 .resolve(chain_name, token_symbol)
                 .map_err(|e| CliError::chain("SVM", format!("{e}")))?;

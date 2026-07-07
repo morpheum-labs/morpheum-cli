@@ -102,7 +102,10 @@ fn add_key(args: AddArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 fn import_evm_key(args: &ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let output = &dispatcher.output;
 
-    let hex_str = args.private_key.strip_prefix("0x").unwrap_or(&args.private_key);
+    let hex_str = args
+        .private_key
+        .strip_prefix("0x")
+        .unwrap_or(&args.private_key);
     if hex_str.len() != 64 || !hex_str.chars().all(|c| c.is_ascii_hexdigit()) {
         return Err(CliError::invalid_input(
             "private key must be 32 bytes (64 hex characters)",
@@ -137,7 +140,9 @@ fn show_key(args: &ShowArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         info.evm_address = keyring.evm_address(&args.name).ok();
     }
 
-    dispatcher.output.print_json(&info)
+    dispatcher
+        .output
+        .print_json(&info)
         .map_err(|e| CliError::invalid_input(format!("JSON output: {e}")))?;
 
     Ok(())

@@ -1,5 +1,5 @@
-use clap::{Parser, Subcommand};
 use crate::config::OutputFormat;
+use clap::{Parser, Subcommand};
 
 /// Root CLI structure for the Morpheum command-line interface.
 ///
@@ -9,7 +9,9 @@ use crate::config::OutputFormat;
 #[command(name = "morpheum")]
 #[command(version)]
 #[command(about = "Official CLI for Morpheum — the sovereign AI-native L1")]
-#[command(long_about = "Full support for mwvm simulation, ERC-8004, MCP, A2A, native x402 payments, GMP bridges, agent lifecycle, and all on-chain registries.")]
+#[command(
+    long_about = "Full support for mwvm simulation, ERC-8004, MCP, A2A, native x402 payments, GMP bridges, agent lifecycle, and all on-chain registries."
+)]
 pub struct Cli {
     #[command(flatten)]
     pub global: GlobalArgs,

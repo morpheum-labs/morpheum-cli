@@ -1,6 +1,6 @@
-use clap::{Args, Subcommand};
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use clap::{Args, Subcommand};
 
 /// mwvm — Portable Off-Chain Runtime & Developer Tools (Pillar 1).
 ///
@@ -103,7 +103,10 @@ fn run_infer(args: InferArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     // Production: calls mwvm runtime via SDK (local or remote)
     // sdk.mwvm().infer(args.model, args.prompt, args.params, args.stream)
 
-    output.success(format!("Inference completed successfully with model {}", args.model));
+    output.success(format!(
+        "Inference completed successfully with model {}",
+        args.model
+    ));
 
     Ok(())
 }
@@ -127,7 +130,10 @@ fn run_simulate(args: SimulateArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 fn run_debug(args: DebugArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let output = &dispatcher.output;
 
-    output.info(format!("Starting interactive debug session for agent {}", args.agent));
+    output.info(format!(
+        "Starting interactive debug session for agent {}",
+        args.agent
+    ));
 
     if let Some(bp) = &args.breakpoint {
         output.info(format!("Breakpoint condition set: {bp}"));
@@ -149,7 +155,10 @@ fn run_orchestrate(args: OrchestrateArgs, dispatcher: &Dispatcher) -> Result<(),
     ));
 
     // Production: mwvm multi-agent orchestration runtime
-    output.success(format!("Multi-agent swarm started with {} agents", args.count));
+    output.success(format!(
+        "Multi-agent swarm started with {} agents",
+        args.count
+    ));
 
     Ok(())
 }

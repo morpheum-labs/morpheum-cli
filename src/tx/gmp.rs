@@ -84,13 +84,8 @@ async fn warp_transfer(args: WarpTransferArgs, dispatcher: &Dispatcher) -> Resul
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Warp Route transfer submitted\nDestination domain: {}\nAmount: {} (asset {})\nTxHash: {}",
@@ -141,10 +136,7 @@ fn decode_hex(label: &str, s: &str) -> Result<Vec<u8>, CliError> {
     hex::decode(s).map_err(|e| CliError::invalid_input(format!("invalid hex for {label}: {e}")))
 }
 
-async fn update_params(
-    args: UpdateParamsArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn update_params(args: UpdateParamsArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let raw = std::fs::read_to_string(&args.params_file).map_err(|e| CliError::Io {
         context: format!("reading params file '{}': {e}", args.params_file.display()),
         source: e,
@@ -186,8 +178,10 @@ async fn update_params(
         let mut wr_builder = WarpRouteConfigBuilder::new().recipient_address(recipient);
 
         for (domain, token) in &wr.routes {
-            let collateral =
-                decode_hex(&format!("routes[{domain}].collateral_address"), &token.collateral_address)?;
+            let collateral = decode_hex(
+                &format!("routes[{domain}].collateral_address"),
+                &token.collateral_address,
+            )?;
             wr_builder = wr_builder.add_route(*domain, collateral, token.asset_index);
         }
 
@@ -198,13 +192,8 @@ async fn update_params(
     let request = builder.build().map_err(CliError::Sdk)?;
 
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "GMP params updated\nAuthority: {}\nTxHash: {}",

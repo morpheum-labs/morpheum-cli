@@ -39,9 +39,7 @@ impl Output {
     {
         match self.format {
             OutputFormat::Table => {
-                let table = Table::new(vec![item])
-                    .with(Style::modern())
-                    .to_string();
+                let table = Table::new(vec![item]).with(Style::modern()).to_string();
                 println!("{table}");
                 Ok(())
             }
@@ -51,8 +49,7 @@ impl Output {
 
     /// Prints a value as pretty-printed JSON to stdout.
     pub fn print_json<T: Serialize + ?Sized>(&self, value: &T) -> io::Result<()> {
-        let json = serde_json::to_string_pretty(value)
-            .map_err(io::Error::other)?;
+        let json = serde_json::to_string_pretty(value).map_err(io::Error::other)?;
         println!("{json}");
         Ok(())
     }
@@ -64,9 +61,7 @@ impl Output {
             return Ok(());
         }
 
-        let table = Table::new(items)
-            .with(Style::modern())
-            .to_string();
+        let table = Table::new(items).with(Style::modern()).to_string();
 
         println!("{table}");
         Ok(())

@@ -5,44 +5,44 @@ use crate::error::CliError;
 
 pub mod registry;
 
-#[cfg(feature = "identity")]
-pub mod identity;
-#[cfg(feature = "bank")]
-pub mod bank;
-#[cfg(feature = "reputation")]
-pub mod reputation;
-#[cfg(feature = "validation")]
-pub mod validation;
-#[cfg(feature = "memory")]
-pub mod memory;
-#[cfg(feature = "vc")]
-pub mod vc;
-#[cfg(feature = "intent")]
-pub mod intent;
-#[cfg(feature = "marketplace")]
-pub mod marketplace;
-#[cfg(feature = "job")]
-pub mod job;
-#[cfg(feature = "inferreg")]
-pub mod inferreg;
 #[cfg(feature = "agentreg")]
 pub mod agentreg;
+#[cfg(feature = "bank")]
+pub mod bank;
+#[cfg(feature = "cctp")]
+pub mod cctp;
+#[cfg(feature = "cosmwasm")]
+pub mod cosmwasm;
 #[cfg(feature = "directory")]
 pub mod directory;
-#[cfg(feature = "interop")]
-pub mod interop;
-#[cfg(feature = "x402")]
-pub mod x402;
 #[cfg(all(feature = "gmp", feature = "interop"))]
 pub mod gmp;
 #[cfg(feature = "gov")]
 pub mod gov;
-#[cfg(feature = "cosmwasm")]
-pub mod cosmwasm;
-#[cfg(feature = "cctp")]
-pub mod cctp;
+#[cfg(feature = "identity")]
+pub mod identity;
+#[cfg(feature = "inferreg")]
+pub mod inferreg;
+#[cfg(feature = "intent")]
+pub mod intent;
+#[cfg(feature = "interop")]
+pub mod interop;
+#[cfg(feature = "job")]
+pub mod job;
+#[cfg(feature = "marketplace")]
+pub mod marketplace;
+#[cfg(feature = "memory")]
+pub mod memory;
+#[cfg(feature = "reputation")]
+pub mod reputation;
 #[cfg(feature = "svm")]
 pub mod svm_usdc;
+#[cfg(feature = "validation")]
+pub mod validation;
+#[cfg(feature = "vc")]
+pub mod vc;
+#[cfg(feature = "x402")]
+pub mod x402;
 
 /// On-chain query commands across all Morpheum modules.
 ///

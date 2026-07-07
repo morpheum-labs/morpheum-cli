@@ -52,12 +52,8 @@ pub async fn execute(
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
     match cmd {
-        AgentRegistryQueryCommands::Record(args) => {
-            query_record(args, &dispatcher).await
-        }
-        AgentRegistryQueryCommands::ByCaip(args) => {
-            query_by_caip(args, &dispatcher).await
-        }
+        AgentRegistryQueryCommands::Record(args) => query_record(args, &dispatcher).await,
+        AgentRegistryQueryCommands::ByCaip(args) => query_by_caip(args, &dispatcher).await,
         AgentRegistryQueryCommands::ExportStatus(args) => {
             query_export_status(args, &dispatcher).await
         }

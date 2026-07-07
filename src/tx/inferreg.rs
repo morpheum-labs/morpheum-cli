@@ -1,7 +1,7 @@
 use clap::{Args, Subcommand};
 
+use morpheum_sdk_native::inferreg::{QuantFormat, RegisterModelBuilder};
 use morpheum_signing_native::signer::Signer;
-use morpheum_sdk_native::inferreg::{RegisterModelBuilder, QuantFormat};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -60,16 +60,11 @@ pub async fn execute(
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
     match cmd {
-        InferenceRegistryCommands::RegisterModel(args) => {
-            register_model(args, &dispatcher).await
-        }
+        InferenceRegistryCommands::RegisterModel(args) => register_model(args, &dispatcher).await,
     }
 }
 
-async fn register_model(
-    args: RegisterModelArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn register_model(args: RegisterModelArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let authority = hex::encode(signer.account_id().0);
 
@@ -93,11 +88,11 @@ async fn register_model(
         .supported_ops(args.supported_ops)
         .version(args.version)
         .weights_payload(weights_payload)
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Model registered: {} ({:?}, {}B params)\nTxHash: {}",

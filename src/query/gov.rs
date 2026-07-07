@@ -47,47 +47,35 @@ pub async fn execute(cmd: GovQueryCommands, dispatcher: Dispatcher) -> Result<()
 
 async fn params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_gov::GovClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client = morpheum_sdk_gov::GovClient::new(dispatcher.sdk_config(), Box::new(transport));
 
     let result = client.query_params().await?;
 
-    let json =
-        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn proposal(args: ProposalArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_gov::GovClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client = morpheum_sdk_gov::GovClient::new(dispatcher.sdk_config(), Box::new(transport));
 
     let result = client.query_proposal(args.proposal_id).await?;
 
-    let json =
-        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
 
 async fn proposals(args: ProposalsArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_gov::GovClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client = morpheum_sdk_gov::GovClient::new(dispatcher.sdk_config(), Box::new(transport));
 
     let result = client
         .query_proposals(args.limit, args.offset, None, None, None)
         .await?;
 
-    let json =
-        serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

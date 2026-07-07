@@ -43,18 +43,12 @@ pub async fn execute(
     dispatcher: Dispatcher,
 ) -> Result<(), CliError> {
     match cmd {
-        InferenceRegistryQueryCommands::Model(args) => {
-            query_model(args, &dispatcher).await
-        }
+        InferenceRegistryQueryCommands::Model(args) => query_model(args, &dispatcher).await,
         InferenceRegistryQueryCommands::ModelsByQuant(args) => {
             query_models_by_quant(args, &dispatcher).await
         }
-        InferenceRegistryQueryCommands::ActiveModels => {
-            query_active_models(&dispatcher).await
-        }
-        InferenceRegistryQueryCommands::Params => {
-            query_params(&dispatcher).await
-        }
+        InferenceRegistryQueryCommands::ActiveModels => query_active_models(&dispatcher).await,
+        InferenceRegistryQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 

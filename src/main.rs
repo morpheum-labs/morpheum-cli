@@ -1,23 +1,23 @@
 #![allow(unused_assignments)]
 
+mod a2a;
 mod cli;
 mod config;
 mod dispatcher;
 mod error;
 mod keyring;
+mod keys;
+mod mcp;
+mod mwvm;
 mod output;
-mod status;
-mod tx;
 mod query;
+mod status;
 #[cfg(feature = "_transport")]
 mod transport;
+mod tx;
 mod utils;
 #[allow(dead_code, clippy::all, clippy::pedantic)]
 mod xchain;
-mod mwvm;
-mod mcp;
-mod a2a;
-mod keys;
 
 use clap::Parser;
 use miette::Result as MietteResult;

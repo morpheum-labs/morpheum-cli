@@ -89,10 +89,7 @@ async fn query_entries_by_agent(
     Ok(())
 }
 
-async fn query_memory_root(
-    args: MemoryRootArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn query_memory_root(args: MemoryRootArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
     let client = MemoryClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_memory_root(args.agent_hash).await?;

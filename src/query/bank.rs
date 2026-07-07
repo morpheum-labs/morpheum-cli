@@ -69,9 +69,7 @@ pub async fn execute(cmd: BankQueryCommands, dispatcher: Dispatcher) -> Result<(
         BankQueryCommands::Balance(args) => balance(args, &dispatcher).await,
         BankQueryCommands::Balances(args) => balances(args, &dispatcher).await,
         BankQueryCommands::Assets(args) => query_assets(args, &dispatcher).await,
-        BankQueryCommands::SpendingPolicy(args) => {
-            query_spending_policy(args, &dispatcher).await
-        }
+        BankQueryCommands::SpendingPolicy(args) => query_spending_policy(args, &dispatcher).await,
     }
 }
 
@@ -83,8 +81,7 @@ async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 
     let client = dispatcher.bank_client().await?;
     let result = client.query_balance(&args.address, asset_index).await?;
-    let json = serde_json::to_string_pretty(&result)
-        .unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -92,8 +89,7 @@ async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 async fn balances(args: BalancesArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let client = dispatcher.bank_client().await?;
     let result = client.query_balances(&args.address).await?;
-    let json = serde_json::to_string_pretty(&result)
-        .unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -101,8 +97,7 @@ async fn balances(args: BalancesArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 async fn query_assets(args: AssetsArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let client = dispatcher.bank_client().await?;
     let result = client.query_assets(args.type_filter).await?;
-    let json = serde_json::to_string_pretty(&result)
-        .unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }
@@ -115,8 +110,7 @@ async fn query_spending_policy(
     let result = client
         .query_spending_policy(&args.agent_id, args.asset_index)
         .await?;
-    let json = serde_json::to_string_pretty(&result)
-        .unwrap_or_else(|_| format!("{result:?}"));
+    let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
     Ok(())
 }

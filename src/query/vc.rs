@@ -81,19 +81,15 @@ pub async fn execute(cmd: VcQueryCommands, dispatcher: Dispatcher) -> Result<(),
         VcQueryCommands::Status(args) => query_status(args, &dispatcher).await,
         VcQueryCommands::ByIssuer(args) => query_by_issuer(args, &dispatcher).await,
         VcQueryCommands::BySubject(args) => query_by_subject(args, &dispatcher).await,
-        VcQueryCommands::RevocationBitmap(args) => {
-            query_revocation_bitmap(args, &dispatcher).await
-        }
+        VcQueryCommands::RevocationBitmap(args) => query_revocation_bitmap(args, &dispatcher).await,
         VcQueryCommands::Params => query_params(&dispatcher).await,
     }
 }
 
 async fn query_vc(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::vc::VcClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::vc::VcClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_vc(args.vc_id).await?;
     let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
@@ -102,10 +98,8 @@ async fn query_vc(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError
 
 async fn query_status(args: StatusArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::vc::VcClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::vc::VcClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_vc_status(args.vc_id).await?;
     let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
@@ -114,10 +108,8 @@ async fn query_status(args: StatusArgs, dispatcher: &Dispatcher) -> Result<(), C
 
 async fn query_by_issuer(args: ByIssuerArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::vc::VcClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::vc::VcClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_vcs_by_issuer(args.issuer, args.limit, args.offset)
         .await?;
@@ -128,10 +120,8 @@ async fn query_by_issuer(args: ByIssuerArgs, dispatcher: &Dispatcher) -> Result<
 
 async fn query_by_subject(args: BySubjectArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::vc::VcClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::vc::VcClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_vcs_by_subject(args.subject, args.limit, args.offset)
         .await?;
@@ -145,10 +135,8 @@ async fn query_revocation_bitmap(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::vc::VcClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::vc::VcClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_revocation_bitmap(args.issuer).await?;
     let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
@@ -157,10 +145,8 @@ async fn query_revocation_bitmap(
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::vc::VcClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::vc::VcClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_params().await?;
     let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");

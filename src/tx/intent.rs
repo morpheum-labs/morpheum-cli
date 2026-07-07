@@ -1,9 +1,8 @@
 use clap::{Args, Subcommand, ValueEnum};
 
 use morpheum_sdk_native::intent::{
-    SubmitIntentBuilder, CancelIntentBuilder,
-    Comparator, ConditionalParams, DeclarativeParams, OrderAction, Side, SliceCurve, Tif,
-    TriggerCondition, TwapParams,
+    CancelIntentBuilder, Comparator, ConditionalParams, DeclarativeParams, OrderAction, PovParams,
+    Side, SliceCurve, SubmitIntentBuilder, Tif, TriggerCondition, TwapParams,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -12,7 +11,7 @@ use crate::error::CliError;
 
 /// Transaction commands for the `intent` module.
 ///
-/// Supports declarative, TWAP, conditional, and multi-leg intent
+/// Supports declarative, TWAP, POV, conditional, and multi-leg intent
 /// submission and cancellation.
 #[derive(Subcommand)]
 pub enum IntentCommands {
@@ -21,6 +20,9 @@ pub enum IntentCommands {
 
     /// Submit a TWAP intent (time-weighted execution)
     SubmitTwap(SubmitTwapArgs),
+
+    /// Submit a POV intent (volume-participation execution)
+    SubmitPov(SubmitPovArgs),
 
     /// Submit a declarative intent (natural-language goal)
     SubmitDeclarative(SubmitDeclarativeArgs),
@@ -59,6 +61,30 @@ impl From<CliTif> for Tif {
             CliTif::Gtc => Tif::Gtc,
             CliTif::Ioc => Tif::Ioc,
             CliTif::Fok => Tif::Fok,
+        }
+    }
+}
+
+/// TWAP slice-size distribution across the execution window.
+#[derive(Clone, Copy, Debug, ValueEnum)]
+pub enum CliSliceCurve {
+    /// Equal-sized slices (dust on the last slice).
+    Uniform,
+    /// Larger early slices, ramping down.
+    FrontLoaded,
+    /// Larger late slices, ramping up.
+    BackLoaded,
+    /// Agent-supplied per-slice volume profile (requires `--slice-weight`).
+    Custom,
+}
+
+impl From<CliSliceCurve> for SliceCurve {
+    fn from(c: CliSliceCurve) -> Self {
+        match c {
+            CliSliceCurve::Uniform => SliceCurve::Uniform,
+            CliSliceCurve::FrontLoaded => SliceCurve::FrontLoaded,
+            CliSliceCurve::BackLoaded => SliceCurve::BackLoaded,
+            CliSliceCurve::Custom => SliceCurve::Custom,
         }
     }
 }
@@ -164,8 +190,72 @@ pub struct SubmitTwapArgs {
     #[arg(long)]
     pub num_slices: u32,
 
+    /// Slice-size distribution across the window
+    #[arg(long, value_enum, default_value = "uniform")]
+    pub curve: CliSliceCurve,
+
+    /// Custom volume-profile weight for a slice (repeat once per slice, in order).
+    /// Required with `--curve custom`; one weight >= 1 per slice.
+    #[arg(long = "slice-weight")]
+    pub slice_weights: Vec<u32>,
+
     /// Time-in-force for each slice
     #[arg(long, value_enum, default_value = "gtc")]
+    pub tif: CliTif,
+
+    /// Per-slice limit price (1e8 fixed-point decimal string)
+    #[arg(long)]
+    pub limit_price_e8: String,
+
+    /// Key name to sign with
+    #[arg(long, default_value = "default")]
+    pub from: String,
+
+    /// Optional memo
+    #[arg(long)]
+    pub memo: Option<String>,
+}
+
+#[derive(Args)]
+pub struct SubmitPovArgs {
+    /// Agent hash
+    #[arg(long)]
+    pub agent_hash: String,
+
+    /// Market to execute the POV against
+    #[arg(long)]
+    pub market_index: u64,
+
+    /// Bucket the POV slices trade against
+    #[arg(long)]
+    pub bucket_id: u64,
+
+    /// Direction (buy or sell)
+    #[arg(long, value_enum)]
+    pub side: CliSide,
+
+    /// Total order size
+    #[arg(long)]
+    pub total_size: u64,
+
+    /// Target participation of realized market volume, in basis points (1..=10000)
+    #[arg(long)]
+    pub participation_rate_bps: u32,
+
+    /// Execution window in milliseconds
+    #[arg(long)]
+    pub duration_ms: u64,
+
+    /// Minimum child-order size (1e8); below-floor ticks are skipped. 0 = none
+    #[arg(long, default_value = "0")]
+    pub min_slice_size: u64,
+
+    /// Maximum child-order size (1e8), bounding a single tick. 0 = unbounded
+    #[arg(long, default_value = "0")]
+    pub max_slice_size: u64,
+
+    /// Time-in-force for each slice
+    #[arg(long, value_enum, default_value = "ioc")]
     pub tif: CliTif,
 
     /// Per-slice limit price (1e8 fixed-point decimal string)
@@ -231,6 +321,7 @@ pub async fn execute(cmd: IntentCommands, dispatcher: Dispatcher) -> Result<(), 
     match cmd {
         IntentCommands::SubmitConditional(args) => submit_conditional(args, &dispatcher).await,
         IntentCommands::SubmitTwap(args) => submit_twap(args, &dispatcher).await,
+        IntentCommands::SubmitPov(args) => submit_pov(args, &dispatcher).await,
         IntentCommands::SubmitDeclarative(args) => submit_declarative(args, &dispatcher).await,
         IntentCommands::Cancel(args) => cancel(args, &dispatcher).await,
     }
@@ -273,9 +364,8 @@ async fn submit_conditional(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Conditional intent submitted\nTrigger: market={} {:?} {}\nAction: {:?} qty={} @ {}\nTxHash: {}",
@@ -297,24 +387,71 @@ async fn submit_twap(args: SubmitTwapArgs, dispatcher: &Dispatcher) -> Result<()
         total_size: args.total_size,
         num_slices: args.num_slices,
         duration_ms: args.duration_ms,
-        curve: SliceCurve::Uniform,
+        curve: args.curve.into(),
         tif: args.tif.into(),
         limit_price_e8: args.limit_price_e8.clone(),
+        slice_weights: args.slice_weights.clone(),
     };
 
     let request = SubmitIntentBuilder::new()
         .agent_hash(&args.agent_hash)
         .twap(params)
         .agent_signature(agent_sig)
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
-        "TWAP intent submitted\n{:?} {} over {}ms in {} slices @ {}\nTxHash: {}",
-        args.side, args.total_size, args.duration_ms, args.num_slices, args.limit_price_e8, txhash,
+        "TWAP intent submitted\n{:?} {} over {}ms in {} slices ({:?} curve) @ {}\nTxHash: {}",
+        args.side,
+        args.total_size,
+        args.duration_ms,
+        args.num_slices,
+        args.curve,
+        args.limit_price_e8,
+        txhash,
+    ));
+
+    Ok(())
+}
+
+async fn submit_pov(args: SubmitPovArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
+    let agent_sig = signer.public_key().to_proto_bytes();
+
+    let params = PovParams {
+        market_index: args.market_index,
+        bucket_id: args.bucket_id,
+        side: args.side.into(),
+        total_size: args.total_size,
+        participation_rate_bps: args.participation_rate_bps,
+        duration_ms: args.duration_ms,
+        min_slice_size: args.min_slice_size,
+        max_slice_size: args.max_slice_size,
+        tif: args.tif.into(),
+        limit_price_e8: args.limit_price_e8.clone(),
+    };
+
+    let request = SubmitIntentBuilder::new()
+        .agent_hash(&args.agent_hash)
+        .pov(params)
+        .agent_signature(agent_sig)
+        .build()
+        .map_err(CliError::Sdk)?;
+
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
+
+    dispatcher.output.success(format!(
+        "POV intent submitted\n{:?} {} over {}ms @ {}bps participation @ {}\nTxHash: {}",
+        args.side,
+        args.total_size,
+        args.duration_ms,
+        args.participation_rate_bps,
+        args.limit_price_e8,
+        txhash,
     ));
 
     Ok(())
@@ -338,11 +475,11 @@ async fn submit_declarative(
         .agent_hash(&args.agent_hash)
         .declarative(params)
         .agent_signature(agent_sig)
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Declarative intent submitted\nGoal: {}\nStyle: {}\nTxHash: {}",
@@ -360,11 +497,11 @@ async fn cancel(args: CancelArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
         .intent_id(&args.intent_id)
         .agent_signature(agent_sig)
         .reason(&args.reason)
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Intent {} cancelled\nReason: {}\nTxHash: {}",

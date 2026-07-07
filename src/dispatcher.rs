@@ -18,16 +18,17 @@ pub struct Dispatcher {
 
 impl Dispatcher {
     pub fn new(config: MorpheumConfig, keyring: KeyringManager, output: Output) -> Self {
-        Self { config, keyring, output }
+        Self {
+            config,
+            keyring,
+            output,
+        }
     }
 
     /// Returns an `SdkConfig` derived from the CLI's current configuration.
     #[cfg(feature = "_transport")]
     pub fn sdk_config(&self) -> morpheum_sdk_core::SdkConfig {
-        morpheum_sdk_core::SdkConfig::new(
-            self.config.rpc_url.clone(),
-            self.config.chain_id.clone(),
-        )
+        morpheum_sdk_core::SdkConfig::new(self.config.rpc_url.clone(), self.config.chain_id.clone())
     }
 
     /// Creates a `GrpcTransport` connected to the configured RPC endpoint.

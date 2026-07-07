@@ -1,12 +1,10 @@
 use clap::{Args, Subcommand};
 
 use morpheum_sdk_gov::builder::{
-    CancelProposalBuilder, ProposalDepositBuilder, ProposalVoteBuilder,
-    ScheduleUpgradeBuilder, SubmitProposalBuilder,
+    CancelProposalBuilder, ProposalDepositBuilder, ProposalVoteBuilder, ScheduleUpgradeBuilder,
+    SubmitProposalBuilder,
 };
-use morpheum_sdk_gov::types::{
-    ProposalClass, UpgradePlan, VoteOption, WeightedVoteOption,
-};
+use morpheum_sdk_gov::types::{ProposalClass, UpgradePlan, VoteOption, WeightedVoteOption};
 use morpheum_sdk_gov::AccountId;
 use morpheum_signing_native::signer::Signer;
 
@@ -196,10 +194,8 @@ async fn submit_proposal(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Proposal submitted\nTitle: {}\nClass: {:?}\nDeposit: {}\nTxHash: {}",
@@ -212,22 +208,25 @@ async fn submit_proposal(
 /// Parses a JSON array of execution messages into `Vec<ProtoAny>`.
 ///
 /// Expected format: `[{"type_url":"/mod.v1.Msg","value":"<hex>"}]`
-fn parse_execution_messages(json_str: &str) -> Result<Vec<morpheum_proto::google::protobuf::Any>, CliError> {
+fn parse_execution_messages(
+    json_str: &str,
+) -> Result<Vec<morpheum_proto::google::protobuf::Any>, CliError> {
     #[derive(serde::Deserialize)]
     struct RawMessage {
         type_url: String,
         value: String,
     }
 
-    let raw: Vec<RawMessage> = serde_json::from_str(json_str)
-        .map_err(|e| CliError::InvalidInput { reason: format!("invalid --messages JSON: {e}") })?;
+    let raw: Vec<RawMessage> =
+        serde_json::from_str(json_str).map_err(|e| CliError::InvalidInput {
+            reason: format!("invalid --messages JSON: {e}"),
+        })?;
 
     raw.into_iter()
         .map(|m| {
-            let bytes = hex::decode(&m.value)
-                .map_err(|e| CliError::InvalidInput {
-                    reason: format!("invalid hex in message value for '{}': {e}", m.type_url),
-                })?;
+            let bytes = hex::decode(&m.value).map_err(|e| CliError::InvalidInput {
+                reason: format!("invalid hex in message value for '{}': {e}", m.type_url),
+            })?;
             Ok(morpheum_proto::google::protobuf::Any {
                 type_url: m.type_url,
                 value: bytes,
@@ -247,10 +246,8 @@ async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Deposit added\nProposal: {}\nAmount: {}\nTxHash: {}",
@@ -272,10 +269,8 @@ async fn vote(args: VoteArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Vote cast\nProposal: {}\nOption: {:?}\nWeight: {}\nTxHash: {}",
@@ -302,10 +297,8 @@ async fn cancel_proposal(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Proposal cancelled\nProposal: {}\nTxHash: {}",
@@ -346,10 +339,8 @@ async fn schedule_upgrade(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Upgrade scheduled\nName: {}\nTitle: {}\nGrace: {}s\nTxHash: {}",

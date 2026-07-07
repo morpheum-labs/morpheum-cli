@@ -43,20 +43,11 @@ pub struct ProofExportArgs {
     pub proof_id: String,
 }
 
-pub async fn execute(
-    cmd: InteropQueryCommands,
-    dispatcher: Dispatcher,
-) -> Result<(), CliError> {
+pub async fn execute(cmd: InteropQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
-        InteropQueryCommands::BridgeRequest(args) => {
-            query_bridge_request(args, &dispatcher).await
-        }
-        InteropQueryCommands::IntentExport(args) => {
-            query_intent_export(args, &dispatcher).await
-        }
-        InteropQueryCommands::ProofExport(args) => {
-            query_proof_export(args, &dispatcher).await
-        }
+        InteropQueryCommands::BridgeRequest(args) => query_bridge_request(args, &dispatcher).await,
+        InteropQueryCommands::IntentExport(args) => query_intent_export(args, &dispatcher).await,
+        InteropQueryCommands::ProofExport(args) => query_proof_export(args, &dispatcher).await,
         InteropQueryCommands::Params => query_params(&dispatcher).await,
     }
 }

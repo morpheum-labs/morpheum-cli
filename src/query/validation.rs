@@ -58,10 +58,7 @@ pub struct ProofsByTypeArgs {
     pub offset: u32,
 }
 
-pub async fn execute(
-    cmd: ValidationQueryCommands,
-    dispatcher: Dispatcher,
-) -> Result<(), CliError> {
+pub async fn execute(cmd: ValidationQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
         ValidationQueryCommands::Proof(args) => query_proof(args, &dispatcher).await,
         ValidationQueryCommands::ProofsByAgent(args) => {

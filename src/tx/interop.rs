@@ -1,10 +1,10 @@
 use clap::{Args, Subcommand};
 
-use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::interop::{
-    BridgeRequestBuilder, ExportIntentBuilder, ExportProofBuilder,
-    CrossChainProofPacket, IntentExportPacket,
+    BridgeRequestBuilder, CrossChainProofPacket, ExportIntentBuilder, ExportProofBuilder,
+    IntentExportPacket,
 };
+use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -179,9 +179,8 @@ async fn bridge(args: BridgeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Bridge request submitted\n{} -> {}\nTxHash: {}",
@@ -191,10 +190,7 @@ async fn bridge(args: BridgeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
     Ok(())
 }
 
-async fn export_intent(
-    args: ExportIntentArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn export_intent(args: ExportIntentArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let sig = signer.public_key().to_proto_bytes();
 
@@ -208,11 +204,11 @@ async fn export_intent(
         .intent_data(intent_data)
         .signature(sig.clone())
         .signer(sig)
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Intent {} exported to {}\nTxHash: {}",
@@ -238,11 +234,11 @@ async fn export_proof(args: ExportProofArgs, dispatcher: &Dispatcher) -> Result<
     let request = ExportProofBuilder::new()
         .proof_packet(proof_packet)
         .signer(signer_bytes)
-        .build().map_err(CliError::Sdk)?;
+        .build()
+        .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    ).await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Proof exported for agent {}\n{} -> {}\nTxHash: {}",

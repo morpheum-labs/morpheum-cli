@@ -2,9 +2,7 @@ use std::path::PathBuf;
 
 use clap::{Args, Subcommand};
 
-use morpheum_sdk_cosmwasm::{
-    ExecuteContractBuilder, InstantiateContractBuilder, StoreCodeBuilder,
-};
+use morpheum_sdk_cosmwasm::{ExecuteContractBuilder, InstantiateContractBuilder, StoreCodeBuilder};
 use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
@@ -105,13 +103,8 @@ async fn store_code(args: StoreCodeArgs, dispatcher: &Dispatcher) -> Result<(), 
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Code stored\nWASM file: {}\nSize: {size_kb} KB\nTxHash: {txhash}",
@@ -146,13 +139,8 @@ async fn instantiate(args: InstantiateArgs, dispatcher: &Dispatcher) -> Result<(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Contract instantiated\nCode ID: {}\nLabel: {}\nTxHash: {txhash}",
@@ -182,13 +170,8 @@ async fn execute_contract(args: ExecuteArgs, dispatcher: &Dispatcher) -> Result<
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Contract executed\nContract: {}\nTxHash: {txhash}",
@@ -206,9 +189,9 @@ fn parse_fund(s: &str) -> Result<(&str, &str), CliError> {
             format!("invalid --funds format '{s}': expected 'amount:denom' (e.g. '1000000000000000000:oneir')"),
         ))?;
     if amount.is_empty() || denom.is_empty() {
-        return Err(CliError::invalid_input(
-            format!("invalid --funds format '{s}': both amount and denom must be non-empty"),
-        ));
+        return Err(CliError::invalid_input(format!(
+            "invalid --funds format '{s}': both amount and denom must be non-empty"
+        )));
     }
     Ok((denom, amount))
 }

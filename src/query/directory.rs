@@ -43,17 +43,10 @@ pub struct ProfilesArgs {
     pub tags: Option<String>,
 }
 
-pub async fn execute(
-    cmd: DirectoryQueryCommands,
-    dispatcher: Dispatcher,
-) -> Result<(), CliError> {
+pub async fn execute(cmd: DirectoryQueryCommands, dispatcher: Dispatcher) -> Result<(), CliError> {
     match cmd {
-        DirectoryQueryCommands::Profile(args) => {
-            query_profile(args, &dispatcher).await
-        }
-        DirectoryQueryCommands::Profiles(args) => {
-            query_profiles(args, &dispatcher).await
-        }
+        DirectoryQueryCommands::Profile(args) => query_profile(args, &dispatcher).await,
+        DirectoryQueryCommands::Profiles(args) => query_profiles(args, &dispatcher).await,
         DirectoryQueryCommands::Params => query_params(&dispatcher).await,
     }
 }

@@ -1,9 +1,9 @@
 use clap::{Args, Subcommand};
 
-use morpheum_signing_native::signer::Signer;
-use morpheum_sdk_native::reputation::ForceMilestoneBuilder;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use morpheum_sdk_native::reputation::ForceMilestoneBuilder;
+use morpheum_signing_native::signer::Signer;
 
 /// Transaction commands for the `reputation` module.
 ///
@@ -55,10 +55,8 @@ async fn force_milestone(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Milestone forced on agent {}\nLevel: {}\nTxHash: {}",

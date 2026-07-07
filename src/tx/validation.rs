@@ -1,9 +1,7 @@
 use clap::{Args, Subcommand};
 
+use morpheum_sdk_native::validation::{ProofType, RevokeProofBuilder, SubmitProofBuilder};
 use morpheum_signing_native::signer::Signer;
-use morpheum_sdk_native::validation::{
-    SubmitProofBuilder, RevokeProofBuilder, ProofType,
-};
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -91,10 +89,8 @@ async fn submit_proof(args: SubmitProofArgs, dispatcher: &Dispatcher) -> Result<
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Proof submitted for agent {}\nType: {}, Score: {}\nTxHash: {}",
@@ -116,10 +112,8 @@ async fn revoke_proof(args: RevokeProofArgs, dispatcher: &Dispatcher) -> Result<
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer, dispatcher, request.to_any(), args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Proof {} revoked\nReason: {}\nTxHash: {}",

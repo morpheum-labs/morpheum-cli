@@ -1,15 +1,14 @@
 use clap::{Args, Subcommand};
 
-use morpheum_signing_native::signer::Signer;
 use morpheum_sdk_native::bank::{
-    TransferBuilder, TransferToBucketBuilder,
-    MintBuilder, OnboardAssetBuilder,
-    SetSpendingPolicyBuilder,
+    MintBuilder, OnboardAssetBuilder, SetSpendingPolicyBuilder, TransferBuilder,
+    TransferToBucketBuilder,
 };
+use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
-use crate::xchain::{ChainSpec, ChainType, CrossChainExecutor, resolve_warp_target};
+use crate::xchain::{resolve_warp_target, ChainSpec, ChainType, CrossChainExecutor};
 
 /// Transaction commands for the `bank` module.
 ///
@@ -232,16 +231,10 @@ pub async fn execute(cmd: BankCommands, dispatcher: Dispatcher) -> Result<(), Cl
         BankCommands::Send(args) => send(args, &dispatcher).await,
         BankCommands::Deposit(args) => deposit(args, &dispatcher).await,
         BankCommands::Withdraw(args) => withdraw(args, &dispatcher).await,
-        BankCommands::TransferToBucket(args) => {
-            transfer_to_bucket(args, &dispatcher).await
-        }
+        BankCommands::TransferToBucket(args) => transfer_to_bucket(args, &dispatcher).await,
         BankCommands::Mint(args) => mint(args, &dispatcher).await,
-        BankCommands::OnboardAsset(args) => {
-            onboard_asset(args, &dispatcher).await
-        }
-        BankCommands::SetSpendingPolicy(args) => {
-            set_spending_policy(args, &dispatcher).await
-        }
+        BankCommands::OnboardAsset(args) => onboard_asset(args, &dispatcher).await,
+        BankCommands::SetSpendingPolicy(args) => set_spending_policy(args, &dispatcher).await,
     }
 }
 
@@ -260,13 +253,8 @@ async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Transfer complete\nTo: {}\nAmount: {} (asset {})\nTxHash: {}",
@@ -278,10 +266,7 @@ async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 // ── Deposit (external -> Morpheum) ──────────────────────────────────
 
-async fn deposit(
-    args: DepositArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let spec = ChainSpec::parse(&args.chain)?;
     let executor = CrossChainExecutor::from_dispatcher(dispatcher);
 
@@ -344,10 +329,7 @@ async fn deposit(
 // ── Withdraw (Morpheum -> external) ─────────────────────────────────
 
 #[cfg(feature = "_transport")]
-async fn withdraw(
-    args: WithdrawArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     use morpheum_sdk_cosmwasm::WarpRouteTransferBuilder;
 
     let spec = ChainSpec::parse(&args.chain)?;
@@ -375,13 +357,9 @@ async fn withdraw(
     let from_address = morpheum_primitives::address::encode_address(&acct[acct.len() - 20..]);
 
     let recipient_bytes = {
-        let s = args
-            .recipient
-            .strip_prefix("0x")
-            .unwrap_or(&args.recipient);
-        hex::decode(s).map_err(|e| {
-            CliError::invalid_input(format!("invalid recipient hex: {e}"))
-        })?
+        let s = args.recipient.strip_prefix("0x").unwrap_or(&args.recipient);
+        hex::decode(s)
+            .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
     };
 
     let chain_label = spec.chain_type.label();
@@ -395,13 +373,8 @@ async fn withdraw(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Withdrawal submitted ({chain_label})\n\
@@ -416,10 +389,7 @@ async fn withdraw(
 }
 
 #[cfg(not(feature = "_transport"))]
-async fn withdraw(
-    _args: WithdrawArgs,
-    _dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn withdraw(_args: WithdrawArgs, _dispatcher: &Dispatcher) -> Result<(), CliError> {
     Err(CliError::invalid_input(
         "withdraw requires transport support -- enable the bank feature",
     ))
@@ -442,13 +412,8 @@ async fn transfer_to_bucket(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Deposited {} (asset {}) into bucket {}\nTxHash: {}",
@@ -460,10 +425,7 @@ async fn transfer_to_bucket(
 
 // ── Mint ────────────────────────────────────────────────────────────
 
-async fn mint(
-    args: MintArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
 
     let mut builder = MintBuilder::new()
@@ -477,13 +439,8 @@ async fn mint(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Minted {} (asset {}) to {}\nTxHash: {}",
@@ -495,10 +452,7 @@ async fn mint(
 
 // ── OnboardAsset ────────────────────────────────────────────────────
 
-async fn onboard_asset(
-    args: OnboardAssetArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let from_address = hex::encode(signer.account_id().0);
 
@@ -511,13 +465,8 @@ async fn onboard_asset(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Asset onboarded: {} ({})\nType: {}, Supply: {}\nTxHash: {}",
@@ -546,20 +495,14 @@ async fn set_spending_policy(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        None,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
 
     dispatcher.output.success(format!(
         "Spending policy set for agent {}\n\
          Asset: {}, Daily: {}, Hourly: {}, Per-tx: {}\n\
          TxHash: {}",
-        args.agent_id, args.asset_index,
-        args.daily_cap, args.hourly_cap, args.per_tx_cap, txhash,
+        args.agent_id, args.asset_index, args.daily_cap, args.hourly_cap, args.per_tx_cap, txhash,
     ));
 
     Ok(())

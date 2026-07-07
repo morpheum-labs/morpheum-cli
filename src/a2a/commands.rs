@@ -1,7 +1,7 @@
-use clap::{Args, Subcommand};
-use serde::Serialize;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use clap::{Args, Subcommand};
+use serde::Serialize;
 
 /// A2A (`Agent2Agent` Protocol) commands (Pillar 2 compatibility layer).
 ///
@@ -102,7 +102,11 @@ fn delegate_task(args: DelegateArgs, dispatcher: &Dispatcher) -> Result<(), CliE
     output.info(format!(
         "Delegating task to agent {} {}",
         args.target,
-        if args.local { "(local mwvm simulation)" } else { "(via A2A gateway)" }
+        if args.local {
+            "(local mwvm simulation)"
+        } else {
+            "(via A2A gateway)"
+        }
     ));
 
     // Production: sdk.a2a().delegate(...) or gateway call
@@ -122,13 +126,23 @@ fn discover_agents(args: DiscoverArgs, dispatcher: &Dispatcher) -> Result<(), Cl
         "Discovering agents matching '{}' (limit: {}) {}",
         args.query,
         args.limit,
-        if args.local { "(local simulation)" } else { "(via A2A directory)" }
+        if args.local {
+            "(local simulation)"
+        } else {
+            "(via A2A directory)"
+        }
     ));
 
     // In production this would call sdk.a2a().discover(...)
     let agents = vec![
-        AgentInfo { id: "did:agent:alpha-trader".to_string(), name: "AlphaTrader".to_string() },
-        AgentInfo { id: "did:agent:research-bot".to_string(), name: "ResearchBot".to_string() },
+        AgentInfo {
+            id: "did:agent:alpha-trader".to_string(),
+            name: "AlphaTrader".to_string(),
+        },
+        AgentInfo {
+            id: "did:agent:research-bot".to_string(),
+            name: "ResearchBot".to_string(),
+        },
     ];
 
     output.print_list(&agents)?;

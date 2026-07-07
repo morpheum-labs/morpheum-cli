@@ -1,9 +1,8 @@
 use clap::{Args, Subcommand, ValueEnum};
 
 use morpheum_sdk_native::x402::{
-    RegisterPolicyBuilder, UpdatePolicyBuilder, RotateAddressBuilder,
-    ApproveOutboundBuilder, FinalizeUptoBuilder, SettleBridgePaymentBuilder,
-    Policy, Scheme, resolve_chain_name,
+    resolve_chain_name, ApproveOutboundBuilder, FinalizeUptoBuilder, Policy, RegisterPolicyBuilder,
+    RotateAddressBuilder, Scheme, SettleBridgePaymentBuilder, UpdatePolicyBuilder,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -307,9 +306,9 @@ async fn pay(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 }
 
 async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    use morpheum_sdk_core::ChainRegistryOps as _;
     use morpheum_sdk_evm::alloy::primitives::{FixedBytes, U256};
     use morpheum_sdk_evm::config::ChainRegistry;
-    use morpheum_sdk_core::ChainRegistryOps as _;
 
     let chain_name = args.chain_name.as_deref().unwrap_or("ethereum");
 
@@ -321,11 +320,20 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         .map_err(|e| CliError::chain("EVM", format!("resolving chain '{chain_name}': {e}")))?;
 
     let settlement = token.settlement_contract.ok_or_else(|| {
-        CliError::chain("EVM", format!("no settlement contract configured for {} on {chain_name}", args.token))
+        CliError::chain(
+            "EVM",
+            format!(
+                "no settlement contract configured for {} on {chain_name}",
+                args.token
+            ),
+        )
     })?;
 
     let alloy_signer = dispatcher.keyring.get_evm_signer(&args.from)?;
-    let from_address = format!("{:#x}", morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer));
+    let from_address = format!(
+        "{:#x}",
+        morpheum_sdk_evm::alloy::signers::Signer::address(&alloy_signer)
+    );
 
     let agent_bytes = hex::decode(args.agent.strip_prefix("0x").unwrap_or(&args.agent))
         .map_err(|e| CliError::invalid_input(format!("invalid agent hex: {e}")))?;
@@ -342,14 +350,19 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
                 .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
             let mut buf = [0u8; 32];
             if decoded.len() != 32 {
-                return Err(CliError::invalid_input("payment_id must be exactly 32 bytes"));
+                return Err(CliError::invalid_input(
+                    "payment_id must be exactly 32 bytes",
+                ));
             }
             buf.copy_from_slice(&decoded);
             buf
         }
         None => {
             use std::time::{SystemTime, UNIX_EPOCH};
-            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
             let mut buf = [0u8; 32];
             buf[..16].copy_from_slice(&ts.to_le_bytes());
             buf[16..].copy_from_slice(&agent_id[..16]);
@@ -363,10 +376,15 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         2 => (amount_parts[0], amount_parts[1]),
         _ => return Err(CliError::invalid_input("invalid amount format")),
     };
-    let whole_val: u128 = whole.parse().map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+    let whole_val: u128 = whole
+        .parse()
+        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
     let frac_len = frac.len();
-    let frac_val: u128 = if frac.is_empty() { 0 } else {
-        frac.parse().map_err(|e| CliError::invalid_input(format!("invalid amount frac: {e}")))?
+    let frac_val: u128 = if frac.is_empty() {
+        0
+    } else {
+        frac.parse()
+            .map_err(|e| CliError::invalid_input(format!("invalid amount frac: {e}")))?
     };
     let dec = token.decimals as u32;
     let scale = 10u128.pow(dec);
@@ -381,13 +399,18 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
          Agent: 0x{}\n\
          Amount: {} {} ({raw_amount} raw)\n\
          Memo: {}",
-        hex::encode(agent_id), args.amount, args.token, args.memo,
+        hex::encode(agent_id),
+        args.amount,
+        args.token,
+        args.memo,
     ));
 
     let provider = morpheum_sdk_evm::build_provider(&chain.rpc_url, alloy_signer.clone())
         .map_err(|e| CliError::chain("EVM", format!("provider: {e}")))?;
 
-    dispatcher.output.info("Approving USDC spend for settlement contract...");
+    dispatcher
+        .output
+        .info("Approving USDC spend for settlement contract...");
     morpheum_sdk_evm::approve_erc20(&provider, token.address, settlement, raw_amount)
         .await
         .map_err(|e| CliError::chain("EVM", format!("approve: {e}")))?;
@@ -418,9 +441,9 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 }
 
 async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    use morpheum_sdk_svm::solana_sdk::signer::keypair::Keypair;
-    use morpheum_sdk_svm::config::SolanaChainRegistry;
     use morpheum_sdk_core::ChainRegistryOps as _;
+    use morpheum_sdk_svm::config::SolanaChainRegistry;
+    use morpheum_sdk_svm::solana_sdk::signer::keypair::Keypair;
 
     let chain_name = args.chain_name.as_deref().unwrap_or("solana");
 
@@ -449,14 +472,19 @@ async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
                 .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
             let mut buf = [0u8; 32];
             if decoded.len() != 32 {
-                return Err(CliError::invalid_input("payment_id must be exactly 32 bytes"));
+                return Err(CliError::invalid_input(
+                    "payment_id must be exactly 32 bytes",
+                ));
             }
             buf.copy_from_slice(&decoded);
             buf
         }
         None => {
             use std::time::{SystemTime, UNIX_EPOCH};
-            let ts = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos();
+            let ts = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_nanos();
             let mut buf = [0u8; 32];
             buf[..16].copy_from_slice(&ts.to_le_bytes());
             buf[16..].copy_from_slice(&agent_id[..16]);
@@ -464,7 +492,9 @@ async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         }
     };
 
-    let amount: u64 = args.amount.parse()
+    let amount: u64 = args
+        .amount
+        .parse()
         .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
 
     dispatcher.output.info(format!(
@@ -474,7 +504,9 @@ async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
          Token: {} (mint: {})\n\
          Agent: 0x{}\n\
          Amount: {amount}",
-        args.token, token.mint, hex::encode(agent_id),
+        args.token,
+        token.mint,
+        hex::encode(agent_id),
     ));
 
     let mut keypair_bytes = [0u8; 64];
@@ -502,7 +534,9 @@ async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
          Signature: {}\n\
          PaymentID: 0x{}\n\
          Amount: {amount} {}",
-        result.signature, hex::encode(result.payment_id), args.token,
+        result.signature,
+        hex::encode(result.payment_id),
+        args.token,
     ));
 
     Ok(())
@@ -533,13 +567,8 @@ async fn register_policy(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "x402 policy registered for agent {}\nMax amount: {}, Asset: {}, Network: {}\nTxHash: {}",
@@ -549,10 +578,7 @@ async fn register_policy(
     Ok(())
 }
 
-async fn update_policy(
-    args: UpdatePolicyArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn update_policy(args: UpdatePolicyArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let owner_sig = signer.public_key().to_proto_bytes();
 
@@ -575,13 +601,8 @@ async fn update_policy(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "x402 policy {} updated for agent {}\nTxHash: {}",
@@ -591,10 +612,7 @@ async fn update_policy(
     Ok(())
 }
 
-async fn rotate_address(
-    args: RotateAddressArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn rotate_address(args: RotateAddressArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let owner_sig = signer.public_key().to_proto_bytes();
 
@@ -608,13 +626,8 @@ async fn rotate_address(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "x402 payment address rotated\nReason: {}\nTxHash: {}",
@@ -631,9 +644,8 @@ async fn approve_outbound(
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
 
-    let idem_key = hex::decode(&args.idempotency_key).map_err(|e| {
-        CliError::invalid_input(format!("invalid hex idempotency key: {e}"))
-    })?;
+    let idem_key = hex::decode(&args.idempotency_key)
+        .map_err(|e| CliError::invalid_input(format!("invalid hex idempotency key: {e}")))?;
 
     let scheme = resolve_payment_scheme(&args)?;
 
@@ -651,13 +663,8 @@ async fn approve_outbound(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     let chain_label = args.chain.as_deref().unwrap_or("native");
     dispatcher.output.success(format!(
@@ -697,9 +704,8 @@ async fn settle_bridge_payment(
 
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
 
-    let sig_payload = hex::decode(&args.signature_payload).map_err(|e| {
-        CliError::invalid_input(format!("invalid hex signature_payload: {e}"))
-    })?;
+    let sig_payload = hex::decode(&args.signature_payload)
+        .map_err(|e| CliError::invalid_input(format!("invalid hex signature_payload: {e}")))?;
 
     let mut builder = SettleBridgePaymentBuilder::new()
         .relayer_address(hex::encode(signer.account_id().0))
@@ -718,13 +724,8 @@ async fn settle_bridge_payment(
 
     let request = builder.build().map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "x402 bridge settlement submitted\n\
@@ -732,8 +733,7 @@ async fn settle_bridge_payment(
          Source: {} → Agent: {}\n\
          Amount: {} {}\n\
          TxHash: {}",
-        args.payment_id, source_chain, args.target_agent_id,
-        args.amount, args.asset, txhash,
+        args.payment_id, source_chain, args.target_agent_id, args.amount, args.asset, txhash,
     ));
 
     Ok(())
@@ -769,10 +769,7 @@ fn parse_scheme(s: &str) -> Result<Scheme, String> {
     }
 }
 
-async fn finalize_upto(
-    args: FinalizeUptoArgs,
-    dispatcher: &Dispatcher,
-) -> Result<(), CliError> {
+async fn finalize_upto(args: FinalizeUptoArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
 
     let request = FinalizeUptoBuilder::new()
@@ -782,13 +779,8 @@ async fn finalize_upto(
         .build()
         .map_err(CliError::Sdk)?;
 
-    let txhash = crate::utils::sign_and_broadcast(
-        signer,
-        dispatcher,
-        request.to_any(),
-        args.memo,
-    )
-    .await?;
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
 
     dispatcher.output.success(format!(
         "Upto payment finalized\n\

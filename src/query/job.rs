@@ -101,10 +101,8 @@ pub async fn execute(cmd: JobQueryCommands, dispatcher: Dispatcher) -> Result<()
 
 async fn query_job(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_job(args.job_id).await?;
     let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");
@@ -113,10 +111,8 @@ async fn query_job(args: GetArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
 async fn query_by_client(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_jobs_by_client(args.agent_hash, args.state, args.limit, args.offset)
         .await?;
@@ -127,10 +123,8 @@ async fn query_by_client(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<()
 
 async fn query_by_provider(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_jobs_by_provider(args.agent_hash, args.state, args.limit, args.offset)
         .await?;
@@ -141,10 +135,8 @@ async fn query_by_provider(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<
 
 async fn query_by_evaluator(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_jobs_by_evaluator(args.agent_hash, args.state, args.limit, args.offset)
         .await?;
@@ -155,10 +147,8 @@ async fn query_by_evaluator(args: ByRoleArgs, dispatcher: &Dispatcher) -> Result
 
 async fn query_active(args: ActiveArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_active_jobs(args.client, args.provider, args.limit, args.offset)
         .await?;
@@ -169,10 +159,8 @@ async fn query_active(args: ActiveArgs, dispatcher: &Dispatcher) -> Result<(), C
 
 async fn query_by_state(args: ByStateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client
         .query_jobs_by_state(args.state, args.limit, args.offset)
         .await?;
@@ -183,10 +171,8 @@ async fn query_by_state(args: ByStateArgs, dispatcher: &Dispatcher) -> Result<()
 
 async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
     let transport = dispatcher.grpc_transport().await?;
-    let client = morpheum_sdk_native::job::JobClient::new(
-        dispatcher.sdk_config(),
-        Box::new(transport),
-    );
+    let client =
+        morpheum_sdk_native::job::JobClient::new(dispatcher.sdk_config(), Box::new(transport));
     let result = client.query_params().await?;
     let json = serde_json::to_string_pretty(&result).unwrap_or_else(|_| format!("{result:?}"));
     println!("{json}");

@@ -72,8 +72,8 @@ async fn smart(args: SmartArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 
     match serde_json::from_slice::<serde_json::Value>(&response) {
         Ok(json) => {
-            let pretty = serde_json::to_string_pretty(&json)
-                .unwrap_or_else(|_| format!("{json:?}"));
+            let pretty =
+                serde_json::to_string_pretty(&json).unwrap_or_else(|_| format!("{json:?}"));
             println!("{pretty}");
         }
         Err(_) => {
@@ -106,8 +106,8 @@ async fn raw(args: RawArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     } else {
         match serde_json::from_slice::<serde_json::Value>(&response) {
             Ok(json) => {
-                let pretty = serde_json::to_string_pretty(&json)
-                    .unwrap_or_else(|_| format!("{json:?}"));
+                let pretty =
+                    serde_json::to_string_pretty(&json).unwrap_or_else(|_| format!("{json:?}"));
                 println!("{pretty}");
             }
             Err(_) => {
