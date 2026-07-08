@@ -2,7 +2,8 @@ use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::job::{
     AttestBuilder, CancelJobBuilder, ClaimRefundBuilder, CompensationPolicy, CreateJobBuilder,
-    Deliverable, FundJobBuilder, SetProviderBuilder, StakeProviderBuilder, SubmitDeliverableBuilder,
+    Deliverable, FundJobBuilder, SetProviderBuilder, StakeProviderBuilder,
+    SubmitDeliverableBuilder, UnderwriteJobBuilder,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -35,6 +36,9 @@ pub enum JobCommands {
 
     /// Post provider collateral for a job (provider) — ARS v8
     StakeProvider(StakeProviderArgs),
+
+    /// Back a covered job with underwriter capital — ARS v10
+    Underwrite(UnderwriteArgs),
 
     /// Cancel a job (client or provider)
     Cancel(CancelJobArgs),
@@ -189,6 +193,21 @@ pub struct StakeProviderArgs {
 }
 
 #[derive(Args)]
+pub struct UnderwriteArgs {
+    /// Job ID to underwrite
+    #[arg(long)]
+    pub job_id: String,
+
+    /// Capital amount in USD; must equal the job's coverage amount
+    #[arg(long)]
+    pub capital_usd: u64,
+
+    /// Key name to sign with (underwriter key)
+    #[arg(long, default_value = "default")]
+    pub from: String,
+}
+
+#[derive(Args)]
 pub struct CancelJobArgs {
     /// Job ID to cancel
     #[arg(long)]
@@ -208,6 +227,7 @@ pub async fn execute(cmd: JobCommands, dispatcher: Dispatcher) -> Result<(), Cli
         JobCommands::ClaimRefund(args) => claim_refund(args, &dispatcher).await,
         JobCommands::SetProvider(args) => set_provider(args, &dispatcher).await,
         JobCommands::StakeProvider(args) => stake_provider(args, &dispatcher).await,
+        JobCommands::Underwrite(args) => underwrite(args, &dispatcher).await,
         JobCommands::Cancel(args) => cancel(args, &dispatcher).await,
     }
 }
@@ -395,6 +415,26 @@ async fn stake_provider(args: StakeProviderArgs, dispatcher: &Dispatcher) -> Res
     dispatcher.output.success(format!(
         "Provider collateral of ${} staked for job {}\nTxHash: {}",
         args.amount_usd, args.job_id, txhash,
+    ));
+
+    Ok(())
+}
+
+async fn underwrite(args: UnderwriteArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
+
+    let request = UnderwriteJobBuilder::new()
+        .job_id(&args.job_id)
+        .capital_usd(args.capital_usd)
+        .build()
+        .map_err(CliError::Sdk)?;
+
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
+
+    dispatcher.output.success(format!(
+        "Underwriter capital of ${} posted for job {}\nTxHash: {}",
+        args.capital_usd, args.job_id, txhash,
     ));
 
     Ok(())
