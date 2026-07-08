@@ -2,7 +2,7 @@ use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::job::{
     AttestBuilder, CancelJobBuilder, ClaimRefundBuilder, CompensationPolicy, CreateJobBuilder,
-    Deliverable, FundJobBuilder, SetProviderBuilder, SubmitDeliverableBuilder,
+    Deliverable, FundJobBuilder, SetProviderBuilder, StakeProviderBuilder, SubmitDeliverableBuilder,
 };
 use morpheum_signing_native::signer::Signer;
 
@@ -32,6 +32,9 @@ pub enum JobCommands {
 
     /// Set or change the provider for a job (client)
     SetProvider(SetProviderArgs),
+
+    /// Post provider collateral for a job (provider) — ARS v8
+    StakeProvider(StakeProviderArgs),
 
     /// Cancel a job (client or provider)
     Cancel(CancelJobArgs),
@@ -171,6 +174,21 @@ pub struct SetProviderArgs {
 }
 
 #[derive(Args)]
+pub struct StakeProviderArgs {
+    /// Job ID to stake collateral for
+    #[arg(long)]
+    pub job_id: String,
+
+    /// Collateral amount in USD; must equal the job's required provider stake
+    #[arg(long)]
+    pub amount_usd: u64,
+
+    /// Key name to sign with (provider key)
+    #[arg(long, default_value = "default")]
+    pub from: String,
+}
+
+#[derive(Args)]
 pub struct CancelJobArgs {
     /// Job ID to cancel
     #[arg(long)]
@@ -189,6 +207,7 @@ pub async fn execute(cmd: JobCommands, dispatcher: Dispatcher) -> Result<(), Cli
         JobCommands::Attest(args) => attest(args, &dispatcher).await,
         JobCommands::ClaimRefund(args) => claim_refund(args, &dispatcher).await,
         JobCommands::SetProvider(args) => set_provider(args, &dispatcher).await,
+        JobCommands::StakeProvider(args) => stake_provider(args, &dispatcher).await,
         JobCommands::Cancel(args) => cancel(args, &dispatcher).await,
     }
 }
@@ -356,6 +375,26 @@ async fn set_provider(args: SetProviderArgs, dispatcher: &Dispatcher) -> Result<
     dispatcher.output.success(format!(
         "Provider for job {} set to {}\nTxHash: {}",
         args.job_id, args.provider_hash, txhash,
+    ));
+
+    Ok(())
+}
+
+async fn stake_provider(args: StakeProviderArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+    let signer = dispatcher.keyring.get_native_signer(&args.from)?;
+
+    let request = StakeProviderBuilder::new()
+        .job_id(&args.job_id)
+        .amount_usd(args.amount_usd)
+        .build()
+        .map_err(CliError::Sdk)?;
+
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
+
+    dispatcher.output.success(format!(
+        "Provider collateral of ${} staked for job {}\nTxHash: {}",
+        args.amount_usd, args.job_id, txhash,
     ));
 
     Ok(())
