@@ -453,7 +453,7 @@ async fn cancel(args: CancelJobArgs, dispatcher: &Dispatcher) -> Result<(), CliE
 
     dispatcher
         .output
-        .success(format!("Job {} cancelled\nTxHash: {}", args.job_id, txhash,));
+        .success(format!("Job {} cancelled\nTxHash: {}", args.job_id, txhash));
 
     Ok(())
 }

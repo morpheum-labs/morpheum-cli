@@ -48,7 +48,7 @@ pub struct BalancesArgs {
 #[derive(Args)]
 pub struct AssetsArgs {
     /// Filter by asset type (numeric proto enum value).
-    /// 1=NATIVE_MORM, 2=TOKEN, 3=RWA, 4=STOCK, 5=COMMODITY, 6=CUSTOM, 7=CANONICAL_STABLECOIN
+    /// `1=NATIVE_MORM`, 2=TOKEN, 3=RWA, 4=STOCK, 5=COMMODITY, 6=CUSTOM, `7=CANONICAL_STABLECOIN`
     #[arg(long)]
     pub type_filter: Option<i32>,
 }

@@ -3,7 +3,6 @@ use clap::{Args, Subcommand};
 use morpheum_sdk_native::memory::{
     DeleteEntryBuilder, MemoryEntryType, StoreEntryBuilder, UpdateEntryBuilder,
 };
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -111,14 +110,12 @@ pub async fn execute(cmd: MemoryCommands, dispatcher: Dispatcher) -> Result<(), 
 
 async fn store(args: StoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = StoreEntryBuilder::new()
         .agent_hash(&args.agent_hash)
         .key(&args.key)
         .value(args.value.as_bytes().to_vec())
-        .entry_type(args.entry_type)
-        .owner_signature(owner_sig);
+        .entry_type(args.entry_type);
 
     if args.expires_at > 0 {
         builder = builder.expires_at(args.expires_at);
@@ -139,13 +136,11 @@ async fn store(args: StoreArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 
 async fn update(args: UpdateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = UpdateEntryBuilder::new()
         .agent_hash(&args.agent_hash)
         .key(&args.key)
-        .new_value(args.value.as_bytes().to_vec())
-        .owner_signature(owner_sig);
+        .new_value(args.value.as_bytes().to_vec());
 
     if let Some(expires) = args.expires_at {
         builder = builder.new_expires_at(expires);
@@ -166,12 +161,10 @@ async fn update(args: UpdateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
 async fn delete(args: DeleteArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().to_proto_bytes();
 
     let request = DeleteEntryBuilder::new()
         .agent_hash(&args.agent_hash)
         .key(&args.key)
-        .owner_signature(owner_sig)
         .build()
         .map_err(CliError::Sdk)?;
 

@@ -8,7 +8,7 @@ use morpheum_signing_native::signer::Signer;
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Transaction commands for CosmWasm contracts on Morpheum's embedded VM.
+/// Transaction commands for `CosmWasm` contracts on Morpheum's embedded VM.
 #[derive(Subcommand)]
 pub enum CosmwasmCommands {
     /// Upload WASM bytecode to the chain

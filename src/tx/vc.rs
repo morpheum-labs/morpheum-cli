@@ -2,7 +2,6 @@ use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::vc::{VcClaims, VcIssueBuilder, VcRevokeBuilder, VcSelfRevokeBuilder};
 use morpheum_sdk_native::AccountId;
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -120,7 +119,6 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let issuer_id = parse_account_id(&args.issuer)?;
     let subject_id = parse_account_id(&args.subject)?;
-    let issuer_sig = signer.public_key().to_proto_bytes();
 
     let claims = VcClaims {
         max_daily_usd: args.max_daily_usd,
@@ -133,8 +131,7 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
     let mut builder = VcIssueBuilder::new()
         .issuer(issuer_id)
         .subject(subject_id)
-        .claims(claims)
-        .issuer_signature(issuer_sig);
+        .claims(claims);
 
     if args.expiry > 0 {
         builder = builder.expiry(args.expiry);
@@ -155,13 +152,8 @@ async fn issue(args: IssueArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 
 async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let issuer_id = parse_account_id(&args.issuer)?;
-    let issuer_sig = signer.public_key().to_proto_bytes();
 
-    let mut builder = VcRevokeBuilder::new()
-        .vc_id(&args.vc_id)
-        .issuer(issuer_id)
-        .issuer_signature(issuer_sig);
+    let mut builder = VcRevokeBuilder::new().vc_id(&args.vc_id);
 
     if let Some(ref reason) = args.reason {
         builder = builder.reason(reason);
@@ -174,18 +166,15 @@ async fn revoke(args: RevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
 
     dispatcher
         .output
-        .success(format!("VC {} revoked\nTxHash: {}", args.vc_id, txhash,));
+        .success(format!("VC {} revoked\nTxHash: {}", args.vc_id, txhash));
 
     Ok(())
 }
 
 async fn self_revoke(args: SelfRevokeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let agent_sig = signer.public_key().to_proto_bytes();
 
-    let mut builder = VcSelfRevokeBuilder::new()
-        .vc_id(&args.vc_id)
-        .agent_signature(agent_sig);
+    let mut builder = VcSelfRevokeBuilder::new().vc_id(&args.vc_id);
 
     if let Some(ref reason) = args.reason {
         builder = builder.reason(reason);

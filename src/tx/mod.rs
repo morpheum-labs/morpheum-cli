@@ -110,7 +110,7 @@ pub enum TxCommands {
     #[command(subcommand)]
     Gov(gov::GovCommands),
 
-    /// CosmWasm contract interaction (store-code, instantiate, execute)
+    /// `CosmWasm` contract interaction (store-code, instantiate, execute)
     #[cfg(feature = "cosmwasm")]
     #[command(subcommand)]
     Cosmwasm(cosmwasm::CosmwasmCommands),

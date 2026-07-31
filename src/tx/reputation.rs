@@ -3,7 +3,6 @@ use clap::{Args, Subcommand};
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 use morpheum_sdk_native::reputation::ForceMilestoneBuilder;
-use morpheum_signing_native::signer::Signer;
 
 /// Transaction commands for the `reputation` module.
 ///
@@ -46,12 +45,10 @@ async fn force_milestone(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let gov_sig = signer.public_key().to_proto_bytes();
 
     let request = ForceMilestoneBuilder::new()
         .agent_hash(&args.agent_hash)
         .milestone_level(args.level)
-        .gov_signature(gov_sig)
         .build()
         .map_err(CliError::Sdk)?;
 

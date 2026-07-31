@@ -94,7 +94,7 @@ pub struct RegisterPolicyArgs {
     #[arg(long)]
     pub max_amount_required: u64,
 
-    /// Bitflags of accepted payment schemes (1=exact, 2=exact_evm, 3=both)
+    /// Bitflags of accepted payment schemes (1=exact, `2=exact_evm`, 3=both)
     #[arg(long, default_value = "3")]
     pub supported_schemes: u64,
 
@@ -301,8 +301,46 @@ pub async fn execute(cmd: X402Commands, dispatcher: Dispatcher) -> Result<(), Cl
 async fn pay(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     match args.chain {
         X402ChainType::Evm => pay_evm(args, dispatcher).await,
-        X402ChainType::Svm => pay_svm(args, dispatcher).await,
+        X402ChainType::Svm => pay_svm(&args, dispatcher),
     }
+}
+
+/// Scales a human decimal amount (`"12.34"`) into the token's base units.
+///
+/// Split out of `pay_evm` so the conversion can be read — and reasoned
+/// about — on its own: it is the step where a user-facing string becomes
+/// the integer actually transferred, and getting the scaling wrong moves
+/// the wrong amount of money.
+fn parse_decimal_amount(
+    amount: &str,
+    decimals: u8,
+) -> Result<morpheum_sdk_evm::alloy::primitives::U256, CliError> {
+    use morpheum_sdk_evm::alloy::primitives::U256;
+
+    let amount_parts: Vec<&str> = amount.split('.').collect();
+    let (whole, frac) = match amount_parts.len() {
+        1 => (amount_parts[0], ""),
+        2 => (amount_parts[0], amount_parts[1]),
+        _ => return Err(CliError::invalid_input("invalid amount format")),
+    };
+    let whole_val: u128 = whole
+        .parse()
+        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
+    let frac_val: u128 = if frac.is_empty() {
+        0
+    } else {
+        frac.parse()
+            .map_err(|e| CliError::invalid_input(format!("invalid amount frac: {e}")))?
+    };
+    let dec = u32::from(decimals);
+    let scale = 10u128.pow(dec);
+    // A fraction longer than `u32::MAX` digits cannot be a real amount.
+    // Saturating makes `dec.saturating_sub` yield 0 — a scale of 1 —
+    // rather than truncating the length into a small number and silently
+    // scaling the amount up.
+    let frac_digits = u32::try_from(frac.len()).unwrap_or(u32::MAX);
+    let frac_scale = 10u128.pow(dec.saturating_sub(frac_digits));
+    Ok(U256::from(whole_val * scale + frac_val * frac_scale))
 }
 
 async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
@@ -344,52 +382,30 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         return Err(CliError::invalid_input("agent ID must be <= 32 bytes"));
     }
 
-    let payment_id_bytes = match &args.payment_id {
-        Some(hex_str) => {
-            let decoded = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
-                .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
-            let mut buf = [0u8; 32];
-            if decoded.len() != 32 {
-                return Err(CliError::invalid_input(
-                    "payment_id must be exactly 32 bytes",
-                ));
-            }
-            buf.copy_from_slice(&decoded);
-            buf
+    let payment_id_bytes = if let Some(hex_str) = &args.payment_id {
+        let decoded = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
+            .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
+        let mut buf = [0u8; 32];
+        if decoded.len() != 32 {
+            return Err(CliError::invalid_input(
+                "payment_id must be exactly 32 bytes",
+            ));
         }
-        None => {
-            use std::time::{SystemTime, UNIX_EPOCH};
-            let ts = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
-            let mut buf = [0u8; 32];
-            buf[..16].copy_from_slice(&ts.to_le_bytes());
-            buf[16..].copy_from_slice(&agent_id[..16]);
-            buf
-        }
+        buf.copy_from_slice(&decoded);
+        buf
+    } else {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let mut buf = [0u8; 32];
+        buf[..16].copy_from_slice(&ts.to_le_bytes());
+        buf[16..].copy_from_slice(&agent_id[..16]);
+        buf
     };
 
-    let amount_parts: Vec<&str> = args.amount.split('.').collect();
-    let (whole, frac) = match amount_parts.len() {
-        1 => (amount_parts[0], ""),
-        2 => (amount_parts[0], amount_parts[1]),
-        _ => return Err(CliError::invalid_input("invalid amount format")),
-    };
-    let whole_val: u128 = whole
-        .parse()
-        .map_err(|e| CliError::invalid_input(format!("invalid amount: {e}")))?;
-    let frac_len = frac.len();
-    let frac_val: u128 = if frac.is_empty() {
-        0
-    } else {
-        frac.parse()
-            .map_err(|e| CliError::invalid_input(format!("invalid amount frac: {e}")))?
-    };
-    let dec = token.decimals as u32;
-    let scale = 10u128.pow(dec);
-    let frac_scale = 10u128.pow(dec.saturating_sub(frac_len as u32));
-    let raw_amount = U256::from(whole_val * scale + frac_val * frac_scale);
+    let raw_amount = parse_decimal_amount(&args.amount, token.decimals)?;
 
     dispatcher.output.info(format!(
         "x402 payment (EVM)\n\
@@ -440,7 +456,7 @@ async fn pay_evm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
     Ok(())
 }
 
-async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
+fn pay_svm(args: &PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     use morpheum_sdk_core::ChainRegistryOps as _;
     use morpheum_sdk_svm::config::SolanaChainRegistry;
     use morpheum_sdk_svm::solana_sdk::signer::keypair::Keypair;
@@ -466,30 +482,27 @@ async fn pay_svm(args: PayArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
         return Err(CliError::invalid_input("agent ID must be <= 32 bytes"));
     }
 
-    let payment_id = match &args.payment_id {
-        Some(hex_str) => {
-            let decoded = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
-                .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
-            let mut buf = [0u8; 32];
-            if decoded.len() != 32 {
-                return Err(CliError::invalid_input(
-                    "payment_id must be exactly 32 bytes",
-                ));
-            }
-            buf.copy_from_slice(&decoded);
-            buf
+    let payment_id = if let Some(hex_str) = &args.payment_id {
+        let decoded = hex::decode(hex_str.strip_prefix("0x").unwrap_or(hex_str))
+            .map_err(|e| CliError::invalid_input(format!("invalid payment_id hex: {e}")))?;
+        let mut buf = [0u8; 32];
+        if decoded.len() != 32 {
+            return Err(CliError::invalid_input(
+                "payment_id must be exactly 32 bytes",
+            ));
         }
-        None => {
-            use std::time::{SystemTime, UNIX_EPOCH};
-            let ts = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_nanos();
-            let mut buf = [0u8; 32];
-            buf[..16].copy_from_slice(&ts.to_le_bytes());
-            buf[16..].copy_from_slice(&agent_id[..16]);
-            buf
-        }
+        buf.copy_from_slice(&decoded);
+        buf
+    } else {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let mut buf = [0u8; 32];
+        buf[..16].copy_from_slice(&ts.to_le_bytes());
+        buf[16..].copy_from_slice(&agent_id[..16]);
+        buf
     };
 
     let amount: u64 = args
@@ -692,7 +705,7 @@ fn resolve_payment_scheme(args: &ApproveOutboundArgs) -> Result<Scheme, CliError
             Ok(Scheme::Exact)
         }
     } else {
-        Ok(args.scheme.clone())
+        Ok(args.scheme)
     }
 }
 
