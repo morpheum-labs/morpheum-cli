@@ -117,7 +117,7 @@ pub enum QueryCommands {
     #[command(subcommand)]
     Gov(gov::GovQueryCommands),
 
-    /// CosmWasm contract queries (smart, raw, contract-info)
+    /// `CosmWasm` contract queries (smart, raw, contract-info)
     #[cfg(feature = "cosmwasm")]
     #[command(subcommand)]
     Cosmwasm(cosmwasm::CosmwasmQueryCommands),

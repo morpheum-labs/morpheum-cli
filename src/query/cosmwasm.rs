@@ -3,7 +3,7 @@ use clap::{Args, Subcommand};
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
 
-/// Query commands for CosmWasm contracts on Morpheum's embedded VM.
+/// Query commands for `CosmWasm` contracts on Morpheum's embedded VM.
 #[derive(Subcommand)]
 pub enum CosmwasmQueryCommands {
     /// Query a contract's smart endpoint with a JSON message

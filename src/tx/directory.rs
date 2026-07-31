@@ -3,7 +3,6 @@ use clap::{Args, Subcommand};
 use morpheum_sdk_native::directory::{
     UpdateProfileBuilder, UpdateVisibilityBuilder, VisibilityLevel,
 };
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -76,14 +75,12 @@ pub async fn execute(cmd: DirectoryCommands, dispatcher: Dispatcher) -> Result<(
 
 async fn update_profile(args: UpdateProfileArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().to_proto_bytes();
 
     let request = UpdateProfileBuilder::new()
         .agent_hash(&args.agent_hash)
         .display_name(&args.display_name)
         .description(&args.description)
         .tags(&args.tags)
-        .owner_signature(owner_sig)
         .build()
         .map_err(CliError::Sdk)?;
 
@@ -103,12 +100,10 @@ async fn update_visibility(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_sig = signer.public_key().to_proto_bytes();
 
     let request = UpdateVisibilityBuilder::new()
         .agent_hash(&args.agent_hash)
         .new_visibility(args.visibility)
-        .owner_signature(owner_sig)
         .build()
         .map_err(CliError::Sdk)?;
 

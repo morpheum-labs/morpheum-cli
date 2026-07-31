@@ -49,18 +49,6 @@ impl Dispatcher {
         ))
     }
 
-    /// Creates an `IdentityClient` backed by a live gRPC connection.
-    #[cfg(feature = "identity")]
-    pub async fn identity_client(
-        &self,
-    ) -> Result<morpheum_sdk_native::identity::IdentityClient, CliError> {
-        let transport = self.grpc_transport().await?;
-        Ok(morpheum_sdk_native::identity::IdentityClient::new(
-            self.sdk_config(),
-            Box::new(transport),
-        ))
-    }
-
     /// Routes the parsed command to the appropriate module.
     pub async fn execute(self, cmd: Commands) -> Result<(), CliError> {
         match cmd {

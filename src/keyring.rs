@@ -105,8 +105,7 @@ impl KeyringManager {
     /// than a BIP-39 mnemonic.
     pub fn is_hex_key(&self, name: &str) -> bool {
         self.load_secret(name)
-            .map(|s| Self::looks_like_hex_key(s.expose_secret().trim()))
-            .unwrap_or(false)
+            .is_ok_and(|s| Self::looks_like_hex_key(s.expose_secret().trim()))
     }
 
     /// Returns the EVM (0x-prefixed) address for a stored key.

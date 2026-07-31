@@ -140,7 +140,6 @@ pub async fn execute(cmd: MarketplaceCommands, dispatcher: Dispatcher) -> Result
 async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
     let seller_hash = hex::encode(signer.account_id().0);
-    let seller_sig = signer.public_key().to_proto_bytes();
 
     let revenue_share = RevenueShareConfig {
         creator_cut_bps: args.creator_cut_bps,
@@ -154,8 +153,7 @@ async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
         .seller_agent_hash(&seller_hash)
         .listing_type(args.listing_type)
         .price_usd(args.price_usd)
-        .revenue_share_config(revenue_share)
-        .seller_signature(seller_sig);
+        .revenue_share_config(revenue_share);
 
     if let Some(ref hash) = args.metadata_hash {
         builder = builder.metadata_hash(hash);
@@ -182,12 +180,10 @@ async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 async fn place_bid(args: PlaceBidArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let bidder_sig = signer.public_key().to_proto_bytes();
 
     let request = PlaceBidBuilder::new()
         .listing_id(&args.listing_id)
         .amount_usd(args.amount_usd)
-        .bidder_signature(bidder_sig)
         .build()
         .map_err(CliError::Sdk)?;
 
@@ -204,12 +200,10 @@ async fn place_bid(args: PlaceBidArgs, dispatcher: &Dispatcher) -> Result<(), Cl
 
 async fn accept_bid(args: AcceptBidArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let seller_sig = signer.public_key().to_proto_bytes();
 
     let request = AcceptBidBuilder::new()
         .listing_id(&args.listing_id)
         .bid_id(&args.bid_id)
-        .seller_signature(seller_sig)
         .build()
         .map_err(CliError::Sdk)?;
 
@@ -229,13 +223,11 @@ async fn request_evaluation(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let requester_sig = signer.public_key().to_proto_bytes();
 
     let request = RequestEvaluationBuilder::new()
         .agent_hash(&args.agent_hash)
         .evaluator_agent_hash(&args.evaluator_hash)
         .fee_usd(args.fee_usd)
-        .requester_signature(requester_sig)
         .build()
         .map_err(CliError::Sdk)?;
 

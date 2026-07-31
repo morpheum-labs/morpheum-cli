@@ -180,7 +180,7 @@ async fn query_params(dispatcher: &Dispatcher) -> Result<(), CliError> {
 }
 
 fn parse_job_state(s: &str) -> Result<JobState, String> {
-    use JobState::*;
+    use JobState::{Cancelled, Completed, Expired, Funded, Open, Rejected, Submitted};
     match s.to_lowercase().as_str() {
         "open" => Ok(Open),
         "funded" => Ok(Funded),
