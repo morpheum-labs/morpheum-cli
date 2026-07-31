@@ -42,14 +42,7 @@ morpheum-sdk-core = { path = "../morpheum-sdk/crates/core", features = ["chain-r
 morpheum-sdk-evm = { path = "../morpheum-sdk/crates/evm" }
 morpheum-sdk-svm = { path = "../morpheum-sdk/crates/svm" }
 morpheum-sdk-cosmwasm = { path = "../morpheum-sdk/crates/cosmwasm" }
-# Deferred with the crate itself. `morpheum-sdk-cctp` path-depends on
-# `contracts/cosmwasm/contracts/hpl-cctp-handler`, which is not in any
-# morpheum-labs repo nor on crates.io. Cargo parses a dependency's
-# manifest to build the graph even when the dependency is optional, so
-# leaving this declared made `cargo` fail on *default* features — the
-# whole CLI, not just the `cctp` feature. Restore alongside
-# morpheum-sdk#5.
-# morpheum-sdk-cctp = { path = "../morpheum-sdk/crates/cctp", optional = true }
+morpheum-sdk-cctp = { path = "../morpheum-sdk/crates/cctp", optional = true }
 morpheum-sdk-gov = { path = "../morpheum-sdk/crates/gov", default-features = false, features = ["std", "serde"], optional = true }
 morpheum-signing-native = { path = "../morpheum-signing/crates/native", features = ["full"] }
 morpheum-proto = { path = "../morpheum-proto", features = ["tonic", "std", "serde"] }
@@ -103,33 +96,41 @@ predicates = "3"
 
 [features]
 default = []
-# Internal: compiles shared gRPC transport + broadcast infrastructure.
-# Activated automatically by every module feature.
+# Internal: the gRPC transport surface — `Dispatcher::grpc_transport`
+# and `sdk_config`. Needed by any module that talks to a node, query or
+# transaction alike.
 _transport = []
+# Internal: transaction submission — nonce resolution, signing, broadcast.
+# Strictly more than `_transport`, and kept separate from it because a
+# query-only module (`cctp`) needs the transport but never submits.
+# Folded together, enabling such a module on its own compiled the whole
+# broadcast path with nothing able to call it — dead code by
+# construction rather than by oversight.
+_tx = ["_transport"]
 # Per-module feature gates — enable as SDK crates become ready.
 # Example: cargo build --features identity
-identity = ["_transport"]
-bank = ["_transport"]
-agentreg = ["_transport"]
-inferreg = ["_transport"]
-interop = ["_transport"]
-job = ["_transport"]
-reputation = ["_transport"]
-validation = ["_transport"]
-memory = ["_transport"]
-vc = ["_transport"]
-intent = ["_transport"]
-marketplace = ["_transport"]
-directory = ["_transport"]
-x402 = ["_transport"]
-gmp = ["_transport", "interop"]
-cosmwasm = ["_transport"]
-# cctp = ["_transport", "dep:morpheum-sdk-cctp"]  # see the dependency note above
-svm = ["_transport"]
-gov = ["_transport", "dep:morpheum-sdk-gov"]
+identity = ["_tx"]
+bank = ["_tx"]
+agentreg = ["_tx"]
+inferreg = ["_tx"]
+interop = ["_tx"]
+job = ["_tx"]
+reputation = ["_tx"]
+validation = ["_tx"]
+memory = ["_tx"]
+vc = ["_tx"]
+intent = ["_tx"]
+marketplace = ["_tx"]
+directory = ["_tx"]
+x402 = ["_tx"]
+gmp = ["_tx", "interop"]
+cosmwasm = ["_tx"]
+cctp = ["_transport", "dep:morpheum-sdk-cctp"]
+svm = ["_tx"]
+gov = ["_tx", "dep:morpheum-sdk-gov"]
 # Enable all modules at once.
 modules = ["identity", "bank", "agentreg", "inferreg", "interop", "job",
-    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "svm", "gov"]  # "cctp" deferred — see above
+    "reputation", "validation", "memory", "vc", "intent", "marketplace", "directory", "x402", "gmp", "cosmwasm", "cctp", "svm", "gov"]
 
 [profile.release]
 opt-level = 3
@@ -144,13 +145,6 @@ opt-level = 1
 
 [lints.rust]
 unsafe_code = "forbid"
-# `cctp` is deferred (see the dependency note above), so Cargo no longer
-# defines it as a feature — but the `#[cfg(feature = "cctp")]` sites in
-# `src/query/` are kept so the code is ready the moment the contract
-# dependency is restored. Declaring the value here keeps those cfgs
-# recognised instead of warning as unknown, while rustc still flags any
-# *other* stray feature cfg.
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cctp"))'] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

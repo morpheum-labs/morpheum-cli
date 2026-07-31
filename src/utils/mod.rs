@@ -1,6 +1,6 @@
 //! Shared utilities for Morpheum CLI transaction and query handlers.
 
-#[cfg(feature = "_transport")]
+#[cfg(feature = "_tx")]
 mod broadcast {
     use morpheum_signing_native::NativeSigner;
 
@@ -91,5 +91,5 @@ mod broadcast {
     }
 }
 
-#[cfg(feature = "_transport")]
+#[cfg(feature = "_tx")]
 pub use broadcast::sign_and_broadcast;
