@@ -100,7 +100,7 @@ async fn pending(args: CctpPendingArgs, dispatcher: &Dispatcher) -> Result<(), C
         println!("No pending transfers.");
     } else {
         let json =
-            serde_json::to_string_pretty(&transfers).unwrap_or_else(|_| format!("{:?}", transfers));
+            serde_json::to_string_pretty(&transfers).unwrap_or_else(|_| format!("{transfers:?}"));
         println!("{json}");
     }
     Ok(())
@@ -145,8 +145,7 @@ async fn routes(args: CctpRoutesArgs, dispatcher: &Dispatcher) -> Result<(), Cli
     if routes.is_empty() {
         println!("No routes enrolled.");
     } else {
-        let json =
-            serde_json::to_string_pretty(&routes).unwrap_or_else(|_| format!("{:?}", routes));
+        let json = serde_json::to_string_pretty(&routes).unwrap_or_else(|_| format!("{routes:?}"));
         println!("{json}");
     }
     Ok(())

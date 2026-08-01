@@ -12,7 +12,9 @@ mod mwvm;
 mod output;
 mod query;
 mod status;
-#[cfg(feature = "_transport")]
+// Dialled only by the broadcast path; a query-only build has no
+// caller for it.
+#[cfg(feature = "_tx")]
 mod transport;
 mod tx;
 mod utils;
