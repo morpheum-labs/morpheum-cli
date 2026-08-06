@@ -57,14 +57,29 @@ mod broadcast {
         let address = hex::encode(signer.account_id().0);
         let nonce = resolve_nonce(&channel, &address).await?;
 
-        let signed_tx = morpheum_signing_native::native(signer)
+        // Phase M3 — bind the signature to this chain instance so it cannot be
+        // replayed onto another chain sharing our `chain_id`. Sourced from
+        // operator configuration, never from `rpc_url`: see `GenesisHash`.
+        //
+        // Left unbound when unconfigured, which validators still accept while
+        // the strict genesis fork is advisory. The warning is deliberate — an
+        // unbound signature is replayable, and that should not be silent.
+        let mut builder = morpheum_signing_native::native(signer)
             .chain_id(&dispatcher.config.chain_id)
             .memo(memo.unwrap_or_default())
             .with_nonce(nonce)
-            .add_message(message)
-            .sign()
-            .await
-            .map_err(CliError::Signing)?;
+            .add_message(message);
+        match dispatcher.config.genesis_hash {
+            Some(genesis_hash) => {
+                builder = builder.with_genesis_hash(*genesis_hash.as_bytes());
+            }
+            None => dispatcher.output.warn(
+                "genesis_hash is not configured — this signature is not bound to a chain \
+                 instance and is replayable on any chain sharing this chain_id. Set it with \
+                 `morpheum config set genesis_hash <hex>`.",
+            ),
+        }
+        let signed_tx = builder.sign().await.map_err(CliError::Signing)?;
 
         let req = morpheum_proto::tx::v1::SubmitTxRequest {
             tx: Some(signed_tx.tx().clone()),
