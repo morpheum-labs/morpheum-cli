@@ -4,3 +4,7 @@
 .env
 .env.local
 /.cargo
+
+# Claude Code — local-only, never committed
+CLAUDE.local.md
+.claude/settings.local.json
