@@ -53,6 +53,16 @@ morpheum tx bank withdraw --chain svm:devnet --token SOL \
 morpheum query gmp delivery --message-id 0xabc123...
 ```
 
+## Transaction Finality
+
+Every `morpheum tx …` command prints a txhash (and, when the node reports it,
+the routed shard) as soon as the node **admits** the transaction. Admission is
+not finality: the transaction may still fail, be skipped, or — during a shard
+outage — never land. Bound your own wait and reconcile the outcome via the
+node's `tx.v1.Query/QueryTxStatus` RPC
+(`GET /tx/v1/tx/{txhash}/status` — `confirmed | failed | skipped | pending |
+not_found`; `pending` is answered only by the node that admitted the tx).
+
 ## Registry Queries
 
 Discover supported chains, tokens, and actions without hard-coded tables.

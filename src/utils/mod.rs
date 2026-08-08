@@ -102,6 +102,16 @@ mod broadcast {
             )));
         }
 
+        // Routed-shard surface (one site for every command). A txhash is an
+        // admission receipt, not finality — the shard lets the user correlate
+        // with per-shard status/health surfaces while they reconcile via
+        // `tx.v1.Query/QueryTxStatus`.
+        if let Some(shard_id) = response.shard_id {
+            dispatcher
+                .output
+                .info(format!("Routed to shard {shard_id}"));
+        }
+
         Ok(response.txhash)
     }
 }
