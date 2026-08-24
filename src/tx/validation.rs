@@ -52,6 +52,11 @@ pub struct RevokeProofArgs {
     #[arg(long)]
     pub proof_id: String,
 
+    /// Subject agent the proof attests (the proof record lives on this
+    /// agent's shard; the revocation routes there)
+    #[arg(long)]
+    pub agent_hash: String,
+
     /// Verifier agent hash performing the revocation
     #[arg(long)]
     pub verifier_hash: String,
@@ -106,6 +111,7 @@ async fn revoke_proof(args: RevokeProofArgs, dispatcher: &Dispatcher) -> Result<
 
     let request = RevokeProofBuilder::new()
         .proof_id(&args.proof_id)
+        .agent_hash(&args.agent_hash)
         .verifier_agent_hash(&args.verifier_hash)
         .verifier_signature(verifier_sig)
         .reason(&args.reason)

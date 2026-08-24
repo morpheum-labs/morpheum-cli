@@ -48,6 +48,11 @@ impl GenesisHash {
     pub const LEN: usize = 32;
 
     /// The raw digest, ready to bind into a signing preimage.
+    ///
+    /// Gated to `_tx` with its production caller (`utils::sign_and_broadcast`)
+    /// plus the unit tests: query-only builds compile `GenesisHash` for config
+    /// parsing but never sign, and an ungated accessor is dead code there.
+    #[cfg(any(test, feature = "_tx"))]
     #[must_use]
     pub const fn as_bytes(&self) -> &[u8; Self::LEN] {
         &self.0
@@ -62,7 +67,11 @@ impl std::str::FromStr for GenesisHash {
         let raw = hex::decode(trimmed).map_err(|err| format!("not valid hex: {err}"))?;
         let len = raw.len();
         let bytes: [u8; Self::LEN] = raw.try_into().map_err(|_| {
-            format!("expected {} bytes ({} hex chars), got {len}", Self::LEN, Self::LEN * 2)
+            format!(
+                "expected {} bytes ({} hex chars), got {len}",
+                Self::LEN,
+                Self::LEN * 2
+            )
         })?;
         Ok(Self(bytes))
     }
@@ -243,9 +252,10 @@ pub async fn execute(cmd: ConfigCommands, dispatcher: Dispatcher) -> Result<(), 
             match key.as_str() {
                 "chain_id" => config.chain_id.clone_from(&value),
                 "genesis_hash" => {
-                    config.genesis_hash = Some(value.parse().map_err(|err| {
-                        CliError::invalid_input(format!("genesis_hash {err}"))
-                    })?);
+                    config.genesis_hash =
+                        Some(value.parse().map_err(|err| {
+                            CliError::invalid_input(format!("genesis_hash {err}"))
+                        })?);
                 }
                 "rpc_url" => config.rpc_url.clone_from(&value),
                 "timeout_secs" => {
@@ -299,17 +309,24 @@ mod tests {
     #[test]
     fn genesis_hash_rejects_a_wrong_length_digest() {
         let short = "5a5a5a";
-        let err = short.parse::<GenesisHash>().expect_err("3 bytes must not parse");
+        let err = short
+            .parse::<GenesisHash>()
+            .expect_err("3 bytes must not parse");
         assert!(err.contains("expected 32 bytes"), "unhelpful error: {err}");
 
         let long = format!("{HASH_HEX}5a");
-        let err = long.parse::<GenesisHash>().expect_err("33 bytes must not parse");
+        let err = long
+            .parse::<GenesisHash>()
+            .expect_err("33 bytes must not parse");
         assert!(err.contains("expected 32 bytes"), "unhelpful error: {err}");
     }
 
     #[test]
     fn genesis_hash_rejects_non_hex() {
-        let err = "zz".repeat(32).parse::<GenesisHash>().expect_err("non-hex must not parse");
+        let err = "zz"
+            .repeat(32)
+            .parse::<GenesisHash>()
+            .expect_err("non-hex must not parse");
         assert!(err.contains("not valid hex"), "unhelpful error: {err}");
     }
 
