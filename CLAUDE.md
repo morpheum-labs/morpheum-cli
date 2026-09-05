@@ -1,4 +1,4 @@
-<!-- morpheum-claude-framework v2026-08-07 — shared blocks synced by sync.sh; edit prose freely -->
+<!-- morpheum-workspace v2026-09-05 — shared blocks synced by sync.sh; edit prose freely -->
 # morpheum-cli
 
 The official Morpheum CLI (`morpheum` binary): a thin wrapper over the Rust `morpheum-sdk`.
