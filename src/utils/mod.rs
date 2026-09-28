@@ -51,11 +51,8 @@ mod broadcast {
         message: morpheum_signing_native::Any,
         memo: Option<String>,
     ) -> Result<String, CliError> {
-        use morpheum_signing_native::signer::Signer;
-
         let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-        let address = hex::encode(signer.account_id().0);
-        let nonce = resolve_nonce(&channel, &address).await?;
+        let nonce = resolve_nonce(&channel, &crate::account::id_hex(&signer)).await?;
 
         // Phase M3 — bind the signature to this chain instance so it cannot be
         // replayed onto another chain sharing our `chain_id`. Sourced from

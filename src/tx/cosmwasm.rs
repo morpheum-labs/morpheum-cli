@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use clap::{Args, Subcommand};
 
 use morpheum_sdk_cosmwasm::{ExecuteContractBuilder, InstantiateContractBuilder, StoreCodeBuilder};
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -88,7 +87,7 @@ pub async fn execute(cmd: CosmwasmCommands, dispatcher: Dispatcher) -> Result<()
 
 async fn store_code(args: StoreCodeArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let sender = hex::encode(signer.account_id().0);
+    let sender = crate::account::address(&signer);
 
     let wasm_byte_code = std::fs::read(&args.wasm_file).map_err(|e| CliError::Io {
         context: format!("reading WASM file '{}': {e}", args.wasm_file.display()),
@@ -116,7 +115,7 @@ async fn store_code(args: StoreCodeArgs, dispatcher: &Dispatcher) -> Result<(), 
 
 async fn instantiate(args: InstantiateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let sender = hex::encode(signer.account_id().0);
+    let sender = crate::account::address(&signer);
 
     let msg_bytes: Vec<u8> = args.msg.as_bytes().to_vec();
     serde_json::from_slice::<serde_json::Value>(&msg_bytes)
@@ -152,7 +151,7 @@ async fn instantiate(args: InstantiateArgs, dispatcher: &Dispatcher) -> Result<(
 
 async fn execute_contract(args: ExecuteArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let sender = hex::encode(signer.account_id().0);
+    let sender = crate::account::address(&signer);
 
     let msg_bytes: Vec<u8> = args.msg.as_bytes().to_vec();
     serde_json::from_slice::<serde_json::Value>(&msg_bytes)

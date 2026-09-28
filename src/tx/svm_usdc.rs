@@ -5,7 +5,6 @@
 
 use clap::{Args, Subcommand};
 use morpheum_sdk_svm::usdc;
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -82,7 +81,7 @@ pub async fn execute(cmd: SvmUsdcCommands, dispatcher: Dispatcher) -> Result<(),
 
 async fn transfer(args: TransferArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
-    let sender = hex::encode(signer.account_id().0);
+    let sender = crate::account::id_hex(&signer);
 
     let msg = usdc::build_usdc_execute(
         &sender,
@@ -106,7 +105,7 @@ async fn transfer(args: TransferArgs, dispatcher: &Dispatcher) -> Result<(), Cli
 
 async fn approve(args: ApproveArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
-    let owner = hex::encode(signer.account_id().0);
+    let owner = crate::account::id_hex(&signer);
 
     let msg = usdc::build_usdc_execute(
         &owner,
@@ -130,7 +129,7 @@ async fn approve(args: ApproveArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 
 async fn transfer_from(args: TransferFromArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
-    let spender = hex::encode(signer.account_id().0);
+    let spender = crate::account::id_hex(&signer);
 
     let msg = usdc::build_usdc_execute(
         &spender,
