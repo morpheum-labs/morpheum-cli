@@ -89,16 +89,11 @@ impl KeyringManager {
         hex_str.len() == 64 && hex_str.chars().all(|c| c.is_ascii_hexdigit())
     }
 
-    /// Returns the Morpheum bech32 (`morm1...`) address for a stored key.
+    /// Returns the canonical Morpheum (`morm1...`) address of a stored key.
     ///
     /// Only works with mnemonic-based keys (not raw hex private keys).
     pub fn morpheum_address(&self, name: &str) -> Result<String, CliError> {
-        use morpheum_signing_native::signer::Signer;
-        let native = self.get_native_signer(name)?;
-        let acct = native.account_id().0;
-        Ok(morpheum_primitives::address::encode_address(
-            &acct[acct.len() - 20..],
-        ))
+        Ok(crate::account::address(&self.get_native_signer(name)?))
     }
 
     /// Returns `true` if the stored secret is a raw hex private key rather
@@ -196,5 +191,78 @@ impl KeyringManager {
         })?;
 
         Ok(SecretString::new(content))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The BIP-39 all-zero-entropy test mnemonic, stored under [`KEY`].
+    const MNEMONIC: &str = "abandon abandon abandon abandon abandon abandon abandon abandon \
+                            abandon abandon abandon about";
+    const KEY: &str = "test";
+
+    /// The canonical address of the native key [`MNEMONIC`] derives, and that
+    /// address right-aligned in a 32-byte recipient word. Computed
+    /// independently of this crate.
+    const ADDRESS: &str = "morm1a58c0pqkdc9tll634xhlnw39nkxq9rknd75hg5";
+    const RECIPIENT: &str = "000000000000000000000000ed0f8784166e0abfff51a9aff9ba259d8c028ed3";
+
+    /// A file-backed keyring in `dir` holding [`MNEMONIC`] under [`KEY`].
+    fn keyring_with_test_key(dir: &tempfile::TempDir) -> KeyringManager {
+        let keyring = KeyringManager {
+            config: MorpheumConfig {
+                keyring_backend: "file".to_string(),
+                ..MorpheumConfig::default()
+            },
+            key_dir: dir.path().to_path_buf(),
+        };
+        keyring
+            .add_native(KEY, &SecretString::new(MNEMONIC.to_string()))
+            .expect("store the test mnemonic");
+        keyring
+    }
+
+    /// A stored key's Morpheum address is its signer's canonical address —
+    /// the one its transactions are attributed to.
+    #[test]
+    fn morpheum_address_is_the_canonical_address_of_the_stored_key() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let keyring = keyring_with_test_key(&dir);
+
+        let address = keyring
+            .morpheum_address(KEY)
+            .expect("address of a stored key");
+        let signer = keyring
+            .get_native_signer(KEY)
+            .expect("signer of a stored key");
+        assert_eq!(address, crate::account::address(&signer));
+        assert_eq!(address, ADDRESS);
+    }
+
+    /// With no explicit recipient, a deposit into Morpheum credits the
+    /// canonical address of the signing key — whether or not the source chain
+    /// accepts a 20-byte explicit recipient — and it is the same word as that
+    /// address given explicitly.
+    #[test]
+    fn default_deposit_recipient_is_the_canonical_address_of_the_stored_key() {
+        let dir = tempfile::tempdir().expect("temp dir");
+        let keyring = keyring_with_test_key(&dir);
+
+        for allow_20_byte in [true, false] {
+            let recipient = crate::xchain::resolve_recipient(None, KEY, &keyring, allow_20_byte)
+                .expect("default recipient");
+            assert_eq!(hex::encode(recipient), RECIPIENT);
+        }
+
+        let signer = keyring
+            .get_native_signer(KEY)
+            .expect("signer of a stored key");
+        let canonical = hex::encode(crate::account::canonical(&signer));
+        let explicit =
+            crate::xchain::resolve_recipient(Some(canonical.as_str()), KEY, &keyring, true)
+                .expect("explicit 20-byte recipient");
+        assert_eq!(hex::encode(explicit), RECIPIENT);
     }
 }

@@ -53,11 +53,8 @@ mod broadcast {
         message: impl Into<TxMessage>,
         memo: Option<String>,
     ) -> Result<String, CliError> {
-        use morpheum_signing_native::signer::Signer;
-
         let channel = crate::transport::connect(&dispatcher.config.rpc_url).await?;
-        let address = hex::encode(signer.account_id().0);
-        let nonce = resolve_nonce(&channel, &address).await?;
+        let nonce = resolve_nonce(&channel, &crate::account::id_hex(&signer)).await?;
 
         let signed_tx = unsigned_tx(signer, dispatcher, message.into(), memo, nonce)?
             .sign()

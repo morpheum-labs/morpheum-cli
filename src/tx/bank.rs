@@ -4,7 +4,6 @@ use morpheum_sdk_native::bank::{
     MintBuilder, OnboardAssetBuilder, SetSpendingPolicyBuilder, TransferBuilder,
     TransferToBucketBuilder,
 };
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -77,7 +76,8 @@ pub struct DepositArgs {
     #[arg(long)]
     pub amount: String,
 
-    /// 32-byte hex recipient address on Morpheum (defaults to sender's address)
+    /// 32-byte hex recipient address on Morpheum (defaults to the canonical
+    /// Morpheum address of the --from key)
     #[arg(long)]
     pub recipient: Option<String>,
 
@@ -242,7 +242,7 @@ pub async fn execute(cmd: BankCommands, dispatcher: Dispatcher) -> Result<(), Cl
 
 async fn send(args: SendArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = hex::encode(signer.account_id().0);
+    let from_address = crate::account::id_hex(&signer);
 
     let request = TransferBuilder::new()
         .from_address(&from_address)
@@ -353,8 +353,7 @@ async fn withdraw(args: WithdrawArgs, dispatcher: &Dispatcher) -> Result<(), Cli
         };
 
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let acct = signer.account_id().0;
-    let from_address = morpheum_primitives::address::encode_address(&acct[acct.len() - 20..]);
+    let from_address = crate::account::address(&signer);
 
     let recipient_bytes = {
         let s = args.recipient.strip_prefix("0x").unwrap_or(&args.recipient);
@@ -402,7 +401,7 @@ async fn transfer_to_bucket(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let address = hex::encode(signer.account_id().0);
+    let address = crate::account::id_hex(&signer);
 
     let request = TransferToBucketBuilder::new()
         .address(&address)
@@ -454,7 +453,7 @@ async fn mint(args: MintArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
 
 async fn onboard_asset(args: OnboardAssetArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = hex::encode(signer.account_id().0);
+    let from_address = crate::account::id_hex(&signer);
 
     let request = OnboardAssetBuilder::new()
         .from_address(&from_address)
@@ -483,7 +482,7 @@ async fn set_spending_policy(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let owner_address = hex::encode(signer.account_id().0);
+    let owner_address = crate::account::id_hex(&signer);
 
     let request = SetSpendingPolicyBuilder::new()
         .owner_address(&owner_address)
