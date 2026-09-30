@@ -1,10 +1,10 @@
 use clap::{Args, Subcommand};
 
+use morpheum_sdk_native::marketplace::requests::ListAgentRequest;
 use morpheum_sdk_native::marketplace::{
     AcceptBidBuilder, ListAgentBuilder, ListingType, PlaceBidBuilder, RequestEvaluationBuilder,
     RevenueShareConfig,
 };
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -33,6 +33,12 @@ pub struct ListArgs {
     /// Agent hash being listed
     #[arg(long)]
     pub agent_hash: String,
+
+    /// Seller agent, named by its agent hash hex(SHA256(DID)). Omitted, the
+    /// signer's bound agent is the seller. An account address is not an agent
+    /// hash.
+    #[arg(long)]
+    pub seller_agent_hash: Option<String>,
 
     /// Listing type (full-ownership, co-ownership, rental, evaluation-only)
     #[arg(long, value_parser = parse_listing_type)]
@@ -139,33 +145,7 @@ pub async fn execute(cmd: MarketplaceCommands, dispatcher: Dispatcher) -> Result
 
 async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let seller_hash = hex::encode(signer.account_id().0);
-
-    let revenue_share = RevenueShareConfig {
-        creator_cut_bps: args.creator_cut_bps,
-        seller_cut_bps: 10_000 - args.creator_cut_bps,
-        evaluator_cut_bps: 0,
-        platform_cut_bps: 0,
-    };
-
-    let mut builder = ListAgentBuilder::new()
-        .agent_hash(&args.agent_hash)
-        .seller_agent_hash(&seller_hash)
-        .listing_type(args.listing_type)
-        .price_usd(args.price_usd)
-        .revenue_share_config(revenue_share);
-
-    if let Some(ref hash) = args.metadata_hash {
-        builder = builder.metadata_hash(hash);
-    }
-    if args.duration > 0 {
-        builder = builder.duration_seconds(args.duration);
-    }
-    if args.expires_at > 0 {
-        builder = builder.expires_at(args.expires_at);
-    }
-
-    let request = builder.build().map_err(CliError::Sdk)?;
+    let request = list_agent_request(&args)?;
 
     let txhash =
         crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
@@ -176,6 +156,38 @@ async fn list(args: ListArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     ));
 
     Ok(())
+}
+
+/// The listing `args` describe. The seller comes from `--seller-agent-hash`
+/// alone: unset, the chain lists for the signer's bound agent.
+fn list_agent_request(args: &ListArgs) -> Result<ListAgentRequest, CliError> {
+    let revenue_share = RevenueShareConfig {
+        creator_cut_bps: args.creator_cut_bps,
+        seller_cut_bps: 10_000 - args.creator_cut_bps,
+        evaluator_cut_bps: 0,
+        platform_cut_bps: 0,
+    };
+
+    let mut builder = ListAgentBuilder::new()
+        .agent_hash(&args.agent_hash)
+        .listing_type(args.listing_type)
+        .price_usd(args.price_usd)
+        .revenue_share_config(revenue_share);
+
+    if let Some(ref seller) = args.seller_agent_hash {
+        builder = builder.seller_agent_hash(seller);
+    }
+    if let Some(ref hash) = args.metadata_hash {
+        builder = builder.metadata_hash(hash);
+    }
+    if args.duration > 0 {
+        builder = builder.duration_seconds(args.duration);
+    }
+    if args.expires_at > 0 {
+        builder = builder.expires_at(args.expires_at);
+    }
+
+    builder.build().map_err(CliError::Sdk)
 }
 
 async fn place_bid(args: PlaceBidArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
@@ -251,5 +263,50 @@ fn parse_listing_type(s: &str) -> Result<ListingType, String> {
         other => Err(format!(
             "unknown listing type '{other}'; expected: full-ownership, co-ownership, rental, evaluation-only"
         )),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    #[derive(Parser)]
+    struct Cmd {
+        #[command(flatten)]
+        args: ListArgs,
+    }
+
+    fn parse_list(extra: &[&str]) -> ListArgs {
+        let agent = "ef".repeat(32);
+        let base = [
+            "list",
+            "--agent-hash",
+            agent.as_str(),
+            "--listing-type",
+            "full-ownership",
+            "--price-usd",
+            "1000",
+            "--metadata-hash",
+            "meta",
+        ];
+        Cmd::try_parse_from(base.iter().chain(extra).copied())
+            .expect("marketplace list flags parse")
+            .args
+    }
+
+    #[test]
+    fn marketplace_list_leaves_seller_to_the_signer() {
+        let request = list_agent_request(&parse_list(&[])).expect("request builds");
+        assert!(request.listing.seller_agent_hash.is_empty());
+    }
+
+    #[test]
+    fn marketplace_list_names_the_given_seller() {
+        let seller = "ab".repeat(32);
+        let request = list_agent_request(&parse_list(&["--seller-agent-hash", &seller]))
+            .expect("request builds");
+        assert_eq!(request.listing.seller_agent_hash, seller);
     }
 }
