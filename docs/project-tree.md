@@ -79,6 +79,7 @@ morpheum-cli/
 │   │
 │   └── utils/
 │       ├── mod.rs
+│       ├── tx_message.rs            # A tx's message + its gas-limit declaration
 │       ├── tx_builder_ext.rs
 │       └── query_client_ext.rs
 │
