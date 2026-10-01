@@ -2,10 +2,9 @@ use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::job::{
     AttestBuilder, CancelJobBuilder, ClaimRefundBuilder, CompensationPolicy, CreateJobBuilder,
-    Deliverable, FundJobBuilder, SetProviderBuilder, StakeProviderBuilder,
-    SubmitDeliverableBuilder, UnderwriteJobBuilder,
+    CreateJobRequest, Deliverable, FundJobBuilder, SetProviderBuilder, StakeProviderBuilder,
+    SubmitDeliverableBuilder, SubmitDeliverableRequest, UnderwriteJobBuilder,
 };
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -46,7 +45,13 @@ pub enum JobCommands {
 
 #[derive(Args)]
 pub struct CreateArgs {
-    /// Evaluator agent hash
+    /// Client agent the job is opened for, named by its agent hash
+    /// hex(SHA256(DID)). Omitted, the job is opened for the signer's bound
+    /// agent. An account address is not an agent hash.
+    #[arg(long)]
+    pub client_agent_hash: Option<String>,
+
+    /// Evaluator agent hash, hex(SHA256(DID))
     #[arg(long)]
     pub evaluator_hash: String,
 
@@ -58,7 +63,7 @@ pub struct CreateArgs {
     #[arg(long)]
     pub expiry: u64,
 
-    /// Optional provider agent hash (can be set later)
+    /// Optional provider agent hash, hex(SHA256(DID)) (can be set later)
     #[arg(long)]
     pub provider_hash: Option<String>,
 
@@ -168,7 +173,7 @@ pub struct SetProviderArgs {
     #[arg(long)]
     pub job_id: String,
 
-    /// New provider agent hash
+    /// New provider agent hash, hex(SHA256(DID))
     #[arg(long)]
     pub provider_hash: String,
 
@@ -234,15 +239,31 @@ pub async fn execute(cmd: JobCommands, dispatcher: Dispatcher) -> Result<(), Cli
 
 async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let client_hash = hex::encode(signer.account_id().0);
+    let request = create_job_request(&args)?;
 
+    let txhash =
+        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
+
+    dispatcher.output.success(format!(
+        "Job created\nBudget: ${}, Evaluator: {}\nTxHash: {}",
+        args.budget_usd, args.evaluator_hash, txhash,
+    ));
+
+    Ok(())
+}
+
+/// The job `args` describe. The client comes from `--client-agent-hash`
+/// alone: unset, the chain opens the job for the signer's bound agent.
+fn create_job_request(args: &CreateArgs) -> Result<CreateJobRequest, CliError> {
     let mut builder = CreateJobBuilder::new()
-        .client_agent_hash(&client_hash)
         .evaluator_agent_hash(&args.evaluator_hash)
         .budget_usd(args.budget_usd)
         .evaluation_fee_usd(args.evaluation_fee_usd)
         .expiry_timestamp(args.expiry);
 
+    if let Some(ref client) = args.client_agent_hash {
+        builder = builder.client_agent_hash(client);
+    }
     if let Some(ref provider) = args.provider_hash {
         builder = builder.provider_agent_hash(provider);
     }
@@ -260,17 +281,7 @@ async fn create(args: CreateArgs, dispatcher: &Dispatcher) -> Result<(), CliErro
             .compensation_policy(CompensationPolicy::CoverageReimbursed);
     }
 
-    let request = builder.build().map_err(CliError::Sdk)?;
-
-    let txhash =
-        crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), args.memo).await?;
-
-    dispatcher.output.success(format!(
-        "Job created\nBudget: ${}, Evaluator: {}\nTxHash: {}",
-        args.budget_usd, args.evaluator_hash, txhash,
-    ));
-
-    Ok(())
+    builder.build().map_err(CliError::Sdk)
 }
 
 async fn fund(args: FundArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
@@ -298,30 +309,7 @@ async fn submit_deliverable(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let provider_hash = hex::encode(signer.account_id().0);
-
-    let payload = args
-        .payload
-        .as_deref()
-        .map(hex::decode)
-        .transpose()
-        .map_err(|e| CliError::invalid_input(format!("invalid hex payload: {e}")))?
-        .unwrap_or_default();
-
-    let deliverable = Deliverable {
-        job_id: args.job_id.clone(),
-        provider_agent_hash: provider_hash,
-        memory_root_hash: args.memory_root_hash.clone(),
-        payload,
-        blob_merkle_root: Vec::new(),
-        submitted_at: 0,
-    };
-
-    let request = SubmitDeliverableBuilder::new()
-        .job_id(&args.job_id)
-        .deliverable(deliverable)
-        .build()
-        .map_err(CliError::Sdk)?;
+    let request = submit_deliverable_request(&args)?;
 
     let txhash =
         crate::utils::sign_and_broadcast(signer, dispatcher, request.to_any(), None).await?;
@@ -332,6 +320,33 @@ async fn submit_deliverable(
     ));
 
     Ok(())
+}
+
+/// The deliverable `args` describe. It names no provider: the chain
+/// attributes it to the job's stored provider.
+fn submit_deliverable_request(
+    args: &SubmitDeliverableArgs,
+) -> Result<SubmitDeliverableRequest, CliError> {
+    let payload = args
+        .payload
+        .as_deref()
+        .map(hex::decode)
+        .transpose()
+        .map_err(|e| CliError::invalid_input(format!("invalid hex payload: {e}")))?
+        .unwrap_or_default();
+
+    let deliverable = Deliverable {
+        job_id: args.job_id.clone(),
+        memory_root_hash: args.memory_root_hash.clone(),
+        payload,
+        ..Deliverable::default()
+    };
+
+    SubmitDeliverableBuilder::new()
+        .job_id(&args.job_id)
+        .deliverable(deliverable)
+        .build()
+        .map_err(CliError::Sdk)
 }
 
 async fn attest(args: AttestArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
@@ -456,4 +471,60 @@ async fn cancel(args: CancelJobArgs, dispatcher: &Dispatcher) -> Result<(), CliE
         .success(format!("Job {} cancelled\nTxHash: {}", args.job_id, txhash));
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+
+    use super::*;
+
+    #[derive(Parser)]
+    struct Cmd {
+        #[command(flatten)]
+        args: CreateArgs,
+    }
+
+    fn parse_create(extra: &[&str]) -> CreateArgs {
+        let evaluator = "cd".repeat(32);
+        let base = [
+            "create",
+            "--evaluator-hash",
+            evaluator.as_str(),
+            "--budget-usd",
+            "1000",
+            "--expiry",
+            "1700100000",
+        ];
+        Cmd::try_parse_from(base.iter().chain(extra).copied())
+            .expect("job create flags parse")
+            .args
+    }
+
+    #[test]
+    fn job_create_leaves_client_to_the_signer() {
+        let request = create_job_request(&parse_create(&[])).expect("request builds");
+        assert!(request.job.client_agent_hash.is_empty());
+    }
+
+    #[test]
+    fn job_create_names_the_given_client() {
+        let client = "ab".repeat(32);
+        let request = create_job_request(&parse_create(&["--client-agent-hash", &client]))
+            .expect("request builds");
+        assert_eq!(request.job.client_agent_hash, client);
+    }
+
+    #[test]
+    fn job_submit_deliverable_names_no_provider() {
+        let args = SubmitDeliverableArgs {
+            job_id: "job-1".into(),
+            memory_root_hash: "root".into(),
+            payload: Some("0a0b".into()),
+            from: "default".into(),
+        };
+        let request = submit_deliverable_request(&args).expect("request builds");
+        assert!(request.deliverable.provider_agent_hash.is_empty());
+        assert_eq!(request.deliverable.payload, vec![0x0a, 0x0b]);
+    }
 }

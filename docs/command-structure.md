@@ -48,7 +48,7 @@ This is the exact pattern described in pillar-2.md and thesis.md.
 
 **On-chain (with `tx`)**:
 ```bash
-morpheum tx job create --provider did:agent:evaluator --budget 5000000
+morpheum tx job create --evaluator-hash <evaluator-agent-hash> --budget-usd 5000000 --expiry 1767225600
 morpheum tx x402 pay did:agent:alpha-trader 2500000 --memo "data subscription"
 morpheum query job status <job-id>
 ```
