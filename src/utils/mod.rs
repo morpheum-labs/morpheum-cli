@@ -108,13 +108,12 @@ mod broadcast {
         memo: Option<String>,
         nonce: morpheum_proto::tx::v1::Nonce,
     ) -> Result<TxBuilder<NativeSigner>, CliError> {
-        // Phase M3 — bind the signature to this chain instance so it cannot be
-        // replayed onto another chain sharing our `chain_id`. Sourced from
-        // operator configuration, never from `rpc_url`: see `GenesisHash`.
+        // Bind the signature to this chain instance so it cannot be replayed
+        // onto another chain sharing our `chain_id`. Sourced from operator
+        // configuration, never from `rpc_url`: see `GenesisHash`.
         //
-        // Left unbound when unconfigured, which validators still accept while
-        // the strict genesis fork is advisory. The warning is deliberate — an
-        // unbound signature is replayable, and that should not be silent.
+        // When unconfigured, warn with the command that fixes it; `sign()`
+        // refuses to build a preimage that binds no chain.
         let mut builder = dispatcher
             .tx_builder(signer, message)?
             .chain_id(&dispatcher.config.chain_id)
@@ -125,9 +124,9 @@ mod broadcast {
                 builder = builder.with_genesis_hash(*genesis_hash.as_bytes());
             }
             None => dispatcher.output.warn(
-                "genesis_hash is not configured — this signature is not bound to a chain \
-                 instance and is replayable on any chain sharing this chain_id. Set it with \
-                 `morpheum config set genesis_hash <hex>`.",
+                "genesis_hash is not configured, so signing will be refused. Set it from \
+                 operator configuration (the chain's published genesis hash, not the node \
+                 you submit to) with `morpheum config set genesis_hash <hex>`.",
             ),
         }
         Ok(builder)
