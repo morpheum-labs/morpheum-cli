@@ -187,16 +187,13 @@ sequenceDiagram
 ### 7. Security & Best Practices
 
 - All private keys never leave the keyring (zeroize + secrecy).
-- Agent signing automatically attaches `TradingKeyClaim` (already audited in signing crate).
+- Agent signing automatically attaches `TradingKeyClaim` (implemented in the signing crate).
 - Rate-limit warnings for high-volume tx scripts.
 - `--dry-run` and `--simulate` flags everywhere.
 - Ledger/Trezor support via existing wallet adapters (already in signing-wasm/native).
 
-### 8. Roadmap & Implementation Readiness
+### 8. Scope
 
-**Phase 0 (Testnet 1 – 1 week)**: Core CLI skeleton + keys + bank + auth + agentreg (tx + query).  
-**Phase 1 (Testnet 2)**: Full module coverage + agent commands + rich output.  
-**Phase 2 (Mainnet)**: Ledger hardware + script mode + MCP gateway proxy commands.
-
-**The shared primitives, SDK, and signing crates are already production-ready.**  
-The CLI skeleton, macro system, config, keyring, and first three modules (`bank`, `auth`, `agentreg`) are **ready to generate right now** in the exact professional format as your attached documents.
+- **Core**: CLI skeleton, keys, bank, auth, agentreg (tx + query).
+- **Modules**: full module coverage, agent commands, rich output.
+- **Further capabilities**: Ledger hardware, script mode, MCP gateway proxy commands.

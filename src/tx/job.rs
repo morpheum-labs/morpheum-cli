@@ -33,10 +33,10 @@ pub enum JobCommands {
     /// Set or change the provider for a job (client)
     SetProvider(SetProviderArgs),
 
-    /// Post provider collateral for a job (provider) — ARS v8
+    /// Post provider collateral for a job (provider)
     StakeProvider(StakeProviderArgs),
 
-    /// Back a covered job with underwriter capital — ARS v10
+    /// Back a covered job with underwriter capital
     Underwrite(UnderwriteArgs),
 
     /// Cancel a job (client or provider)
@@ -75,13 +75,13 @@ pub struct CreateArgs {
     #[arg(long)]
     pub vc_proof: Option<String>,
 
-    /// ARS v3 evaluation-fee track (USD) escrowed on top of the budget and paid
+    /// Evaluation-fee track (USD) escrowed on top of the budget and paid
     /// to the evaluator on both completion and rejection. Zero (the default)
     /// inherits the governance `default_evaluation_fee_usd`.
     #[arg(long, default_value_t = 0)]
     pub evaluation_fee_usd: u64,
 
-    /// ARS v6 self-funded coverage: the claim (USD) reimbursed to the client on
+    /// Self-funded coverage: the claim (USD) reimbursed to the client on
     /// a covered rejection. Non-zero requires governance to have coverage
     /// enabled; it selects the `CoverageReimbursed` policy and escrows a premium
     /// (`coverage * rate`) on top of the budget + fee. Zero (default) disables
@@ -146,7 +146,7 @@ pub struct AttestArgs {
     #[arg(long, default_value = "")]
     pub reason_hash: String,
 
-    /// ARS v2 agreement commitment the evaluator judged against. Must equal the
+    /// Agreement commitment the evaluator judged against. Must equal the
     /// job's stored `job_spec_hash` (leave empty for jobs with no agreement).
     #[arg(long, default_value = "")]
     pub agreement_hash: String,
@@ -273,7 +273,7 @@ fn create_job_request(args: &CreateArgs) -> Result<CreateJobRequest, CliError> {
     if let Some(ref vc) = args.vc_proof {
         builder = builder.vc_proof_hash(vc);
     }
-    // ARS v6: requesting coverage selects the CoverageReimbursed policy (the
+    // Requesting coverage selects the CoverageReimbursed policy (the
     // only policy under which the escrowed premium can ever be claimed).
     if args.coverage_amount_usd > 0 {
         builder = builder

@@ -57,13 +57,12 @@ mod broadcast {
         let address = hex::encode(signer.account_id().0);
         let nonce = resolve_nonce(&channel, &address).await?;
 
-        // Phase M3 — bind the signature to this chain instance so it cannot be
-        // replayed onto another chain sharing our `chain_id`. Sourced from
-        // operator configuration, never from `rpc_url`: see `GenesisHash`.
+        // Bind the signature to this chain instance so it cannot be replayed
+        // onto another chain sharing our `chain_id`. Sourced from operator
+        // configuration, never from `rpc_url`: see `GenesisHash`.
         //
-        // Left unbound when unconfigured, which validators still accept while
-        // the strict genesis fork is advisory. The warning is deliberate — an
-        // unbound signature is replayable, and that should not be silent.
+        // When unconfigured, warn with the command that fixes it; `sign()`
+        // refuses to build a preimage that binds no chain.
         let mut builder = morpheum_signing_native::native(signer)
             .chain_id(&dispatcher.config.chain_id)
             .memo(memo.unwrap_or_default())

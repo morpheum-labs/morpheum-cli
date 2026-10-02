@@ -16,8 +16,8 @@ pub enum OutputFormat {
 
 /// The 32-byte genesis hash of the chain this CLI signs for.
 ///
-/// Bound into every signing preimage (Phase M3) so a signature valid on one
-/// chain cannot be replayed onto another that happens to share its `chain_id`.
+/// Bound into every signing preimage so a signature valid on one chain cannot
+/// be replayed onto another that happens to share its `chain_id`.
 ///
 /// # Trust model
 ///
@@ -110,10 +110,9 @@ pub struct MorpheumConfig {
     /// every signing preimage. See [`GenesisHash`] for why this is configured
     /// rather than fetched.
     ///
-    /// `None` leaves signatures unbound to a chain instance, which validators
-    /// still accept while the strict genesis fork is advisory. Signing warns in
-    /// that case: an unbound signature authorises the transaction on any chain
-    /// sharing this `chain_id`.
+    /// `None` leaves the signing preimage without a chain binding. Signing
+    /// warns in that case, and the signing library refuses to sign a
+    /// transaction that binds no chain — configure it before submitting.
     #[serde(default)]
     pub genesis_hash: Option<GenesisHash>,
 
