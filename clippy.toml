@@ -1,0 +1,15 @@
+# Every transaction the CLI signs starts at `Dispatcher::tx_builder`, the one
+# place its gas limit is declared (`--gas-limit`, or the default raised to the
+# message's own limit). Each path below starts a transaction somewhere else,
+# where that declaration would be skipped, so clippy refuses it everywhere
+# except that one call.
+disallowed-methods = [
+    { path = "morpheum_signing_native::native", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_signing_native::agent", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_signing_native::evm", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_signing_native::solana", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_signing_native::bitcoin", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_signing_core::builder::TxBuilder::new", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_sdk_core::builder::TxBuilder::new", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+    { path = "morpheum_sdk_native::submitter::TxSubmitter::new", reason = "start transactions with Dispatcher::tx_builder, which declares the gas limit" },
+]
