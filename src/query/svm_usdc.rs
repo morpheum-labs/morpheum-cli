@@ -74,13 +74,11 @@ async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
     let sender = hex::encode(signer.account_id().0);
 
-    let msg = usdc::build_usdc_execute(
+    let msg = crate::tx::svm_usdc::usdc_call(
         &sender,
         usdc::encode_balance_of(),
         vec![usdc::AccountMeta::readonly(&args.address)],
-        usdc::DEFAULT_COMPUTE_LIMIT,
-    )
-    .map_err(|e| CliError::internal(format!("build MsgExecute: {e}")))?;
+    )?;
 
     let txhash = crate::utils::sign_and_broadcast(signer, dispatcher, msg, None).await?;
 
@@ -98,16 +96,14 @@ async fn allowance(args: AllowanceArgs, dispatcher: &Dispatcher) -> Result<(), C
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
     let sender = hex::encode(signer.account_id().0);
 
-    let msg = usdc::build_usdc_execute(
+    let msg = crate::tx::svm_usdc::usdc_call(
         &sender,
         usdc::encode_allowance(),
         vec![
             usdc::AccountMeta::readonly(&args.owner),
             usdc::AccountMeta::readonly(&args.spender),
         ],
-        usdc::DEFAULT_COMPUTE_LIMIT,
-    )
-    .map_err(|e| CliError::internal(format!("build MsgExecute: {e}")))?;
+    )?;
 
     let txhash = crate::utils::sign_and_broadcast(signer, dispatcher, msg, None).await?;
 

@@ -46,9 +46,9 @@ Result: < 2 000 LOC for the entire CLI core + auto-generated per-module commands
 ```mermaid
 graph TD
     subgraph "CLI Binary (morpheum)"
-        Entry["main.rs<br/>• clap::Parser<br/>• Config + Keyring init"]
+        Entry["main.rs<br/>• clap::Parser<br/>• Config load"]
         Cmd["Command Enum<br/>(derive + macro)"]
-        Dispatch["Dispatcher (trait + macro)"]
+        Dispatch["Dispatcher<br/>• global flags + Keyring init<br/>• tx_builder: every tx starts here"]
     end
 
     subgraph "Shared Layers (Zero Duplication)"

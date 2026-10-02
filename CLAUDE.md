@@ -33,6 +33,12 @@ cargo build --features modules
   export it; `unsafe_code = "forbid"` stays.
 - New module commands ship with their cargo feature wired into `modules` and an
   `assert_cmd` integration test.
+- Every transaction is signed through `utils::sign_and_broadcast`, which starts it with
+  `Dispatcher::tx_builder` — the one place its gas limit is declared: the global
+  `--gas-limit` (a `TxGasLimit`, refused at parse when out of range), else the signing
+  SDK's default raised to the message's own limit (`TxMessage`). A VM message that states
+  a limit (an SVM `compute_limit`) is passed as `TxMessage::with_own_gas_limit`, never
+  as a bare `Any`. `clippy.toml` refuses every other way to start a transaction.
 - CI must check out the **transitive** sibling closure (a dependency reached via
   `morpheum-primitives` once broke it) — keep `.github/workflows/ci.yml`'s list complete
   when deps change.

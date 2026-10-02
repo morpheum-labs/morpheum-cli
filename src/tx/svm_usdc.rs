@@ -9,6 +9,30 @@ use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use crate::utils::TxMessage;
+use morpheum_signing_native::TxGasLimit;
+
+/// The compute limit every USDC program call the CLI builds states for
+/// itself: the SDK's default. Its transaction declares at least this much
+/// (see [`TxMessage::declared_gas_limit`]). A constant, so an SDK default no
+/// transaction could declare fails the build rather than a submission.
+const COMPUTE_LIMIT: TxGasLimit = match TxGasLimit::new(usdc::DEFAULT_COMPUTE_LIMIT) {
+    Ok(limit) => limit,
+    Err(_) => panic!("the SDK's USDC compute limit must be a declarable gas limit"),
+};
+
+/// A USDC program call from `sender`, stating [`COMPUTE_LIMIT`] both in the
+/// message and as the gas its transaction must declare at least. The query
+/// commands that read through a transaction build theirs here too.
+pub fn usdc_call(
+    sender: &str,
+    instruction_data: Vec<u8>,
+    accounts: Vec<usdc::AccountMeta>,
+) -> Result<TxMessage, CliError> {
+    usdc::build_usdc_execute(sender, instruction_data, accounts, COMPUTE_LIMIT.get())
+        .map(|any| TxMessage::with_own_gas_limit(any, COMPUTE_LIMIT))
+        .map_err(|e| CliError::internal(format!("build MsgExecute: {e}")))
+}
 
 /// SVM USDC native program transaction commands.
 #[derive(Subcommand)]
@@ -84,16 +108,14 @@ async fn transfer(args: TransferArgs, dispatcher: &Dispatcher) -> Result<(), Cli
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
     let sender = hex::encode(signer.account_id().0);
 
-    let msg = usdc::build_usdc_execute(
+    let msg = usdc_call(
         &sender,
         usdc::encode_transfer(args.amount),
         vec![
             usdc::AccountMeta::writable(&sender),
             usdc::AccountMeta::writable(&args.to),
         ],
-        usdc::DEFAULT_COMPUTE_LIMIT,
-    )
-    .map_err(|e| CliError::internal(format!("build MsgExecute: {e}")))?;
+    )?;
 
     let txhash = crate::utils::sign_and_broadcast(signer, dispatcher, msg, None).await?;
 
@@ -108,16 +130,14 @@ async fn approve(args: ApproveArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
     let owner = hex::encode(signer.account_id().0);
 
-    let msg = usdc::build_usdc_execute(
+    let msg = usdc_call(
         &owner,
         usdc::encode_approve(args.amount),
         vec![
             usdc::AccountMeta::writable(&owner),
             usdc::AccountMeta::readonly(&args.spender),
         ],
-        usdc::DEFAULT_COMPUTE_LIMIT,
-    )
-    .map_err(|e| CliError::internal(format!("build MsgExecute: {e}")))?;
+    )?;
 
     let txhash = crate::utils::sign_and_broadcast(signer, dispatcher, msg, None).await?;
 
@@ -132,16 +152,14 @@ async fn transfer_from(args: TransferFromArgs, dispatcher: &Dispatcher) -> Resul
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
     let spender = hex::encode(signer.account_id().0);
 
-    let msg = usdc::build_usdc_execute(
+    let msg = usdc_call(
         &spender,
         usdc::encode_transfer_from(args.amount),
         vec![
             usdc::AccountMeta::writable(&args.from),
             usdc::AccountMeta::writable(&args.to),
         ],
-        usdc::DEFAULT_COMPUTE_LIMIT,
-    )
-    .map_err(|e| CliError::internal(format!("build MsgExecute: {e}")))?;
+    )?;
 
     let txhash = crate::utils::sign_and_broadcast(signer, dispatcher, msg, None).await?;
 
@@ -150,4 +168,31 @@ async fn transfer_from(args: TransferFromArgs, dispatcher: &Dispatcher) -> Resul
         args.from, args.to, args.amount,
     ));
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A USDC program call states [`COMPUTE_LIMIT`] in the message the chain
+    /// runs, and its transaction declares at least that limit: unset, never
+    /// less; `--gas-limit` at the limit is declared as given, and one below
+    /// it is refused.
+    #[test]
+    fn a_usdc_call_declares_at_least_the_compute_limit_it_states() {
+        let below = TxGasLimit::new(COMPUTE_LIMIT.get() - 1).expect("in range");
+        let call = usdc_call("00", usdc::encode_transfer(1), Vec::new()).expect("builds");
+
+        assert!(call.declared_gas_limit(None).expect("unset never refuses") >= COMPUTE_LIMIT);
+        assert_eq!(
+            call.declared_gas_limit(Some(COMPUTE_LIMIT))
+                .expect("at the limit"),
+            COMPUTE_LIMIT,
+        );
+        assert!(call.declared_gas_limit(Some(below)).is_err());
+
+        let stated: serde_json::Value =
+            serde_json::from_slice(&call.into_any().value).expect("MsgExecute is JSON");
+        assert_eq!(stated["compute_limit"], COMPUTE_LIMIT.get());
+    }
 }

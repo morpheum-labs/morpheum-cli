@@ -63,6 +63,28 @@ node's `tx.v1.Query/QueryTxStatus` RPC
 (`GET /tx/v1/tx/{txhash}/status` — `confirmed | failed | skipped | pending |
 not_found`; `pending` is answered only by the node that admitted the tx).
 
+## Gas Limit
+
+Every transaction the CLI signs declares a gas limit. Execution fails once a
+transaction uses more, and the whole limit is reserved in its block whether it
+is used or not. When `--gas-limit` is not given, the transaction declares the
+signing SDK's default (`DEFAULT_GAS_LIMIT` in `morpheum-signing`), which suits
+native-module messages, or the gas limit its message states for itself when
+that is larger (an SVM program call states its compute limit). Contract
+deployments and calls, including `tx bank withdraw` (a Warp Route contract
+call), can need more than either:
+
+```bash
+morpheum tx bank withdraw --chain evm:sepolia --token USDC \
+  --recipient 0x000000000000000000000000<20-byte-address> --amount 1000000 \
+  --gas-limit <gas>
+```
+
+The value must lie between 1 and the chain's per-transaction gas budget, and
+at least the gas limit the message states for itself; the CLI refuses
+anything else before it signs and names the bound. `morpheum --help` prints
+the range and the default.
+
 ## Registry Queries
 
 Discover supported chains, tokens, and actions without hard-coded tables.
