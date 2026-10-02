@@ -224,7 +224,7 @@ pub async fn execute(cmd: ConfigCommands, dispatcher: Dispatcher) -> Result<(), 
             output.info(format!(
                 "genesis_hash:    {}",
                 dispatcher.config.genesis_hash.map_or_else(
-                    || "<unset — signatures are not bound to a chain instance>".to_string(),
+                    || "<unset — signing is refused until it is set>".to_string(),
                     |hash| hash.to_string(),
                 )
             ));

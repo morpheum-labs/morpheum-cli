@@ -73,9 +73,9 @@ mod broadcast {
                 builder = builder.with_genesis_hash(*genesis_hash.as_bytes());
             }
             None => dispatcher.output.warn(
-                "genesis_hash is not configured — this signature is not bound to a chain \
-                 instance and is replayable on any chain sharing this chain_id. Set it with \
-                 `morpheum config set genesis_hash <hex>`.",
+                "genesis_hash is not configured, so signing will be refused. Set it from \
+                 operator configuration (the chain's published genesis hash, not the node \
+                 you submit to) with `morpheum config set genesis_hash <hex>`.",
             ),
         }
         let signed_tx = builder.sign().await.map_err(CliError::Signing)?;
