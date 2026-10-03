@@ -69,10 +69,8 @@ fn program_id(dispatcher: &Dispatcher) -> Result<(), CliError> {
 }
 
 async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    use morpheum_signing_native::signer::Signer;
-
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
-    let sender = hex::encode(signer.account_id().0);
+    let sender = crate::account::id_hex(&signer);
 
     let msg = crate::tx::svm_usdc::usdc_call(
         &sender,
@@ -91,10 +89,8 @@ async fn balance(args: BalanceArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 }
 
 async fn allowance(args: AllowanceArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    use morpheum_signing_native::signer::Signer;
-
     let signer = dispatcher.keyring.get_native_signer(&args.from_key)?;
-    let sender = hex::encode(signer.account_id().0);
+    let sender = crate::account::id_hex(&signer);
 
     let msg = crate::tx::svm_usdc::usdc_call(
         &sender,

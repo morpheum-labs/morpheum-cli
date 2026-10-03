@@ -574,7 +574,7 @@ async fn register_policy(
     };
 
     let request = RegisterPolicyBuilder::new()
-        .owner_address(morpheum_sdk_native::AccountId::new(signer.account_id().0))
+        .owner_address(crate::account::id(&signer))
         .policy(policy)
         .owner_signature(owner_sig)
         .build()
@@ -607,7 +607,7 @@ async fn update_policy(args: UpdatePolicyArgs, dispatcher: &Dispatcher) -> Resul
     };
 
     let request = UpdatePolicyBuilder::new()
-        .owner_address(morpheum_sdk_native::AccountId::new(signer.account_id().0))
+        .owner_address(crate::account::id(&signer))
         .policy_id(&args.policy_id)
         .updated_policy(updated_policy)
         .owner_signature(owner_sig)
@@ -630,7 +630,7 @@ async fn rotate_address(args: RotateAddressArgs, dispatcher: &Dispatcher) -> Res
     let owner_sig = signer.public_key().to_proto_bytes();
 
     let mut builder = RotateAddressBuilder::new()
-        .owner_address(morpheum_sdk_native::AccountId::new(signer.account_id().0))
+        .owner_address(crate::account::id(&signer))
         .owner_signature(owner_sig);
 
     if let Some(ref reason) = args.reason {
@@ -721,7 +721,7 @@ async fn settle_bridge_payment(
         .map_err(|e| CliError::invalid_input(format!("invalid hex signature_payload: {e}")))?;
 
     let mut builder = SettleBridgePaymentBuilder::new()
-        .relayer_address(hex::encode(signer.account_id().0))
+        .relayer_address(crate::account::address(&signer))
         .payment_id(&args.payment_id)
         .source_chain(&source_chain)
         .target_agent_id(&args.target_agent_id)

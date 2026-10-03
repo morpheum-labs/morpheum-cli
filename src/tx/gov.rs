@@ -6,7 +6,6 @@ use morpheum_sdk_gov::builder::{
 };
 use morpheum_sdk_gov::types::{ProposalClass, UpgradePlan, VoteOption, WeightedVoteOption};
 use morpheum_sdk_gov::AccountId;
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -174,7 +173,7 @@ async fn submit_proposal(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let account_id = AccountId::from(signer.account_id());
+    let account_id = AccountId::from(crate::account::id(&signer));
 
     let mut builder = SubmitProposalBuilder::new()
         .from_address(account_id)
@@ -237,7 +236,7 @@ fn parse_execution_messages(
 
 async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let account_id = AccountId::from(signer.account_id());
+    let account_id = AccountId::from(crate::account::id(&signer));
 
     let request = ProposalDepositBuilder::new()
         .from_address(account_id)
@@ -259,7 +258,7 @@ async fn deposit(args: DepositArgs, dispatcher: &Dispatcher) -> Result<(), CliEr
 
 async fn vote(args: VoteArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let account_id = AccountId::from(signer.account_id());
+    let account_id = AccountId::from(crate::account::id(&signer));
 
     let request = ProposalVoteBuilder::new()
         .from_address(account_id)
@@ -285,7 +284,7 @@ async fn cancel_proposal(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let account_id = AccountId::from(signer.account_id());
+    let account_id = AccountId::from(crate::account::id(&signer));
 
     let mut builder = CancelProposalBuilder::new()
         .from_address(account_id)
@@ -313,7 +312,7 @@ async fn schedule_upgrade(
     dispatcher: &Dispatcher,
 ) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let account_id = AccountId::from(signer.account_id());
+    let account_id = AccountId::from(crate::account::id(&signer));
 
     let plan = UpgradePlan {
         name: args.name.clone(),
