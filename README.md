@@ -14,6 +14,12 @@ morpheum keys add default --mnemonic "abandon abandon ..."
 
 # Import a raw EVM private key
 morpheum keys import-evm my-evm-wallet --private-key 0x...
+
+# Bind every transaction to the target chain. Take both values from the chain's
+# published parameters, never from the node you submit to; without a genesis
+# hash, signing is refused.
+morpheum config set chain_id <chain-id>
+morpheum config set genesis_hash <hex>
 ```
 
 ## Cross-Chain Transfers
