@@ -118,7 +118,7 @@ pub enum Commands {
 
     /// Secure key management (native wallets + agent delegation with `TradingKeyClaim`)
     #[command(subcommand)]
-    Keys(crate::keys::KeysCommands),
+    Keys(crate::key_management::KeysCommands),
 
     /// Show current node, chain, and runtime status
     Status,
