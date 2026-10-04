@@ -5,8 +5,10 @@ mod cli;
 mod config;
 mod dispatcher;
 mod error;
+// Not named after its subcommand (`keys`): a directory named `keys` is for key
+// material on disk, never source (tests/source_tree_has_no_keys_directory.rs).
+mod key_management;
 mod keyring;
-mod keys;
 mod mcp;
 mod mwvm;
 mod output;

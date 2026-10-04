@@ -101,7 +101,7 @@ impl Dispatcher {
             Commands::Mwvm(sub) => crate::mwvm::execute(sub, self).await,
             Commands::Mcp(sub) => crate::mcp::execute(sub, self).await,
             Commands::A2a(sub) => crate::a2a::execute(sub, self).await,
-            Commands::Keys(sub) => crate::keys::execute(sub, self).await,
+            Commands::Keys(sub) => crate::key_management::execute(sub, self).await,
             Commands::Status => crate::status::execute(self).await,
             Commands::Config(sub) => crate::config::execute(sub, self).await,
         }
