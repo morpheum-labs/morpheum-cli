@@ -1,6 +1,7 @@
 #![allow(unused_assignments)]
 
 mod a2a;
+mod account;
 mod cli;
 mod config;
 mod dispatcher;

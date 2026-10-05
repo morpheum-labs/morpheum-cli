@@ -1,7 +1,6 @@
 use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::agentreg::TriggerProtocolSyncBuilder;
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -44,7 +43,7 @@ pub async fn execute(cmd: AgentRegistryCommands, dispatcher: Dispatcher) -> Resu
 
 async fn trigger_sync(args: TriggerSyncArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let authority = hex::encode(signer.account_id().0);
+    let authority = crate::account::address(&signer);
 
     let agent_hash_bytes = hex::decode(&args.agent_hash)
         .map_err(|e| CliError::invalid_input(format!("invalid hex for agent_hash: {e}")))?;

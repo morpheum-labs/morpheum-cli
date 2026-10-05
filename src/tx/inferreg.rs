@@ -1,7 +1,6 @@
 use clap::{Args, Subcommand};
 
 use morpheum_sdk_native::inferreg::{QuantFormat, RegisterModelBuilder};
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -66,7 +65,7 @@ pub async fn execute(
 
 async fn register_model(args: RegisterModelArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let authority = hex::encode(signer.account_id().0);
+    let authority = crate::account::address(&signer);
 
     let zk_commitment = hex::decode(&args.zk_commitment)
         .map_err(|e| CliError::invalid_input(format!("invalid hex for zk_commitment: {e}")))?;

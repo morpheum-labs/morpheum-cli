@@ -443,40 +443,41 @@ impl<'a> CrossChainExecutor<'a> {
 
 // ── Helpers ─────────────────────────────────────────────────────────
 
-/// Resolves a 32-byte recipient from either an explicit hex string or the
-/// keyring-derived Morpheum address.
+/// Resolves a 32-byte recipient from either an explicit hex string or, by
+/// default, the canonical Morpheum address of the key `key_name`.
 pub fn resolve_recipient(
     explicit: Option<&str>,
     key_name: &str,
     keyring: &KeyringManager,
     allow_20_byte: bool,
 ) -> Result<[u8; 32], CliError> {
-    let raw = match explicit {
-        Some(hex_str) => {
-            let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
-            hex::decode(s)
-                .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?
-        }
-        None => {
-            use morpheum_signing_native::signer::Signer;
-            let native = keyring.get_native_signer(key_name)?;
-            native.account_id().0.to_vec()
-        }
+    let Some(hex_str) = explicit else {
+        let native = keyring.get_native_signer(key_name)?;
+        return Ok(recipient_word(&crate::account::canonical(&native)));
     };
+    let s = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+    let raw = hex::decode(s)
+        .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?;
 
-    let mut fixed = [0u8; 32];
-    if raw.len() == 32 {
-        fixed.copy_from_slice(&raw);
-    } else if raw.len() == 20 && allow_20_byte {
-        fixed[12..].copy_from_slice(&raw);
-    } else if allow_20_byte {
-        return Err(CliError::invalid_input("recipient must be 20 or 32 bytes"));
-    } else {
+    if let Ok(word) = <[u8; 32]>::try_from(raw.as_slice()) {
+        return Ok(word);
+    }
+    if !allow_20_byte {
         return Err(CliError::invalid_input(
             "recipient must be exactly 32 bytes",
         ));
     }
-    Ok(fixed)
+    <[u8; 20]>::try_from(raw.as_slice())
+        .map(|address| recipient_word(&address))
+        .map_err(|_| CliError::invalid_input("recipient must be 20 or 32 bytes"))
+}
+
+/// A 20-byte address as a Hyperlane `bytes32` recipient: right-aligned in a
+/// zeroed word, the Hyperlane convention for a 20-byte address.
+fn recipient_word(address: &[u8; 20]) -> [u8; 32] {
+    let mut word = [0u8; 32];
+    word[12..].copy_from_slice(address);
+    word
 }
 
 /// Parses a human-readable amount to an on-chain `U256` using the token's
