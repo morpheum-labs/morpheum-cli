@@ -55,10 +55,7 @@ pub fn id_hex(signer: &NativeSigner) -> String {
 #[cfg(test)]
 mod tests {
     use morpheum_primitives::address::{decode_address, encode_address};
-    use morpheum_primitives::tx::TxWrapper;
-    use morpheum_signing_native::proto::tx::v1::Nonce;
     use morpheum_signing_native::types::PublicKey;
-    use morpheum_signing_native::Any;
 
     use super::*;
 
@@ -107,24 +104,47 @@ mod tests {
         assert_ne!(address(&signer()), encode_address(&account_id[12..]));
     }
 
-    /// A transaction the signing builder produces for this key is attributed
-    /// to [`address`]: the address is derived from exactly the key bytes the
-    /// transaction carries.
+    /// A transaction [`crate::dispatcher::Dispatcher::tx_builder`] produces
+    /// for this key is attributed to [`address`]: the address is derived
+    /// from exactly the key bytes the transaction carries.
+    #[cfg(feature = "_tx")]
     #[tokio::test]
     async fn a_signed_transaction_is_attributed_to_the_address() {
+        use clap::Parser;
+        use morpheum_primitives::tx::TxWrapper;
+        use morpheum_signing_native::proto::tx::v1::Nonce;
+        use morpheum_signing_native::Any;
+
+        use crate::cli::Cli;
+        use crate::config::MorpheumConfig;
+        use crate::dispatcher::Dispatcher;
+        use crate::utils::TxMessage;
+
         let key = signer();
         let expected = address(&key);
-        let signed = morpheum_signing_native::native(key)
-            .chain_id("morpheum-test")
-            .with_genesis_hash([1u8; 32])
+        let genesis_hash = "01".repeat(32).parse().expect("32 bytes of hex");
+        let cli = Cli::try_parse_from(["morpheum", "status"]).expect("argv parses");
+        let config = MorpheumConfig {
+            chain_id: "morpheum-test".to_owned(),
+            genesis_hash: Some(genesis_hash),
+            ..MorpheumConfig::default()
+        };
+        let dispatcher = Dispatcher::new(config, cli.global);
+        let signed = dispatcher
+            .tx_builder(
+                key,
+                TxMessage::from(Any {
+                    type_url: "/morpheum.test.v1.Msg".to_string(),
+                    value: Vec::new(),
+                }),
+            )
+            .expect("start the transaction")
+            .chain_id(&dispatcher.config.chain_id)
+            .with_genesis_hash(*genesis_hash.as_bytes())
             .with_nonce(Nonce {
                 monotonic: 1,
                 ts_ms: 0,
                 sub: 0,
-            })
-            .add_message(Any {
-                type_url: "/morpheum.test.v1.Msg".to_string(),
-                value: Vec::new(),
             })
             .sign()
             .await
