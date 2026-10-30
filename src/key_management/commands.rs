@@ -4,6 +4,7 @@ use serde::Serialize;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
+use crate::keyring::KeyringManager;
 
 /// Secure key management commands.
 ///
@@ -122,23 +123,7 @@ fn import_evm_key(args: &ImportEvmArgs, dispatcher: &Dispatcher) -> Result<(), C
 }
 
 fn show_key(args: &ShowArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
-    let keyring = &dispatcher.keyring;
-    let is_hex = keyring.is_hex_key(&args.name);
-
-    let mut info = KeyAddresses {
-        name: args.name.clone(),
-        morpheum_address: None,
-        solana_address: None,
-        evm_address: None,
-    };
-
-    if is_hex {
-        info.evm_address = Some(keyring.evm_address(&args.name)?);
-    } else {
-        info.morpheum_address = Some(keyring.morpheum_address(&args.name)?);
-        info.solana_address = Some(keyring.solana_address(&args.name)?);
-        info.evm_address = keyring.evm_address(&args.name).ok();
-    }
+    let info = KeyAddresses::for_stored_key(&dispatcher.keyring, &args.name)?;
 
     dispatcher
         .output
@@ -187,16 +172,77 @@ fn export_key(args: ExportArgs, dispatcher: &Dispatcher) -> Result<(), CliError>
 #[derive(Serialize)]
 struct KeyAddresses {
     name: String,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    morpheum_address: Option<String>,
+    #[serde(rename = "morpheum_address", skip_serializing_if = "Option::is_none")]
+    canonical_morpheum_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     solana_address: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     evm_address: Option<String>,
 }
 
+impl KeyAddresses {
+    fn for_stored_key(keyring: &KeyringManager, name: &str) -> Result<Self, CliError> {
+        if keyring.is_hex_key(name) {
+            return Ok(Self {
+                name: name.to_owned(),
+                canonical_morpheum_address: None,
+                solana_address: None,
+                evm_address: Some(keyring.evm_address(name)?),
+            });
+        }
+
+        Ok(Self {
+            name: name.to_owned(),
+            canonical_morpheum_address: Some(keyring.morpheum_address(name)?),
+            solana_address: Some(keyring.solana_address(name)?),
+            evm_address: keyring.evm_address(name).ok(),
+        })
+    }
+}
+
 #[derive(tabled::Tabled, Serialize)]
 struct KeyInfo {
     #[tabled(rename = "Key Name")]
     name: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::KeyAddresses;
+
+    #[test]
+    fn shown_addresses_keep_the_morpheum_address_json_field() {
+        let shown = KeyAddresses {
+            name: "trader".to_owned(),
+            canonical_morpheum_address: Some("morm1example".to_owned()),
+            solana_address: Some("So11111111111111111111111111111111111111112".to_owned()),
+            evm_address: Some("0xabc".to_owned()),
+        };
+        let value = serde_json::to_value(&shown).expect("serialize shown addresses");
+
+        assert_eq!(value["name"], "trader");
+        assert_eq!(value["morpheum_address"], "morm1example");
+        assert_eq!(
+            value["solana_address"],
+            "So11111111111111111111111111111111111111112"
+        );
+        assert_eq!(value["evm_address"], "0xabc");
+        assert!(value.get("canonical_morpheum_address").is_none());
+    }
+
+    #[test]
+    fn a_hex_key_omits_morpheum_and_solana_addresses() {
+        let shown = KeyAddresses {
+            name: "evm".to_owned(),
+            canonical_morpheum_address: None,
+            solana_address: None,
+            evm_address: Some("0xabc".to_owned()),
+        };
+        let value = serde_json::to_value(&shown).expect("serialize hex-key addresses");
+
+        assert_eq!(value["name"], "evm");
+        assert_eq!(value["evm_address"], "0xabc");
+        assert!(value.get("morpheum_address").is_none());
+        assert!(value.get("solana_address").is_none());
+    }
 }
