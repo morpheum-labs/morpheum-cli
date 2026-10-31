@@ -23,6 +23,7 @@ morpheum-cli/
 │   ├── cli.rs
 │   ├── config.rs
 │   ├── keyring.rs
+│   ├── account.rs                   # Names for the signing key's account
 │   ├── dispatcher.rs
 │   ├── error.rs
 │   ├── output.rs

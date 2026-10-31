@@ -8,7 +8,6 @@ use morpheum_sdk_native::gmp::{
     HyperlaneParamsBuilder, UpdateGmpParamsBuilder, WarpRouteConfigBuilder,
     WarpRouteTransferBuilder,
 };
-use morpheum_signing_native::signer::Signer;
 
 use crate::dispatcher::Dispatcher;
 use crate::error::CliError;
@@ -70,7 +69,7 @@ pub async fn execute(cmd: GmpCommands, dispatcher: Dispatcher) -> Result<(), Cli
 
 async fn warp_transfer(args: WarpTransferArgs, dispatcher: &Dispatcher) -> Result<(), CliError> {
     let signer = dispatcher.keyring.get_native_signer(&args.from)?;
-    let from_address = hex::encode(signer.account_id().0);
+    let from_address = crate::account::id_hex(&signer);
 
     let recipient_bytes = hex::decode(&args.recipient)
         .map_err(|e| CliError::invalid_input(format!("invalid recipient hex: {e}")))?;
